@@ -12,7 +12,6 @@ import kr.drone.helpgpt.vm.MainViewModel
 @AndroidEntryPoint
 class MainActivity: BaseActivity<ActivityMainBinding, MainViewModel>() {
 
-    private val viemodel: MainViewModel by viewModels()
     override fun getLayoutResourceId(): Int {
         return R.layout.activity_main
     }
