@@ -1,25 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools">
+xmlns:app="http://schemas.android.com/apk/res-auto"
+xmlns:tools="http://schemas.android.com/tools">
 
-        <data>
-            <variable
-                name="activity"
-                type="kr.drone.helpgpt.ui.activity.MainActivity" />
-            <variable
-                name="viewModel"
-                type="kr.drone.helpgpt.vm.MainViewModel" />
-        </data>
+    <data>
+        <variable
+            name="viewModel"
+            type="kr.drone.helpgpt.vm.MainViewModel" />
+    </data>
+    <androidx.slidingpanelayout.widget.SlidingPaneLayout
+        android:id="@+id/settings_slide_pane"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent" android:layout_height="match_parent">
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/settings_btn"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/round_settings_24"
+                android:text="@string/settings"
+                android:contentDescription="@string/settings"
+                android:clickable="true"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintTop_toTopOf="parent"/>
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent" android:layout_height="match_parent">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/fade">
 
-        <!--        <include-->
-        <!--            android:id="@+id/in"-->
-        <!--            layout="@layout/layout_dev"-->
-        <!--            app:activity="@{activity}"-->
-        <!--            app:viewModel="@{viewModel}" />-->
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/user_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginTop="32dp"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                tools:text="Drone0898" />
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/gpt_model_label"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:text="@string/gpt_model"
+                app:layout_constraintStart_toStartOf="@id/user_name"
+                app:layout_constraintTop_toBottomOf="@id/user_name" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/gpt_model_text"
+                android:layout_width="wrap_content"
+                android:layout_height="0dp"
+                android:layout_marginStart="16dp"
+                app:layout_constraintBottom_toBottomOf="@id/gpt_model_label"
+                app:layout_constraintLeft_toRightOf="@id/gpt_model_label"
+                app:layout_constraintTop_toTopOf="@id/gpt_model_label"
+                tools:text="GPT 4.0" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/api_key_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/api_key"
+                app:layout_constraintStart_toStartOf="@id/gpt_model_label"
+                app:layout_constraintTop_toBottomOf="@id/gpt_model_label" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:layout_width="wrap_content"
+                android:layout_height="0dp"
+                android:layout_marginStart="16dp"
+                app:layout_constraintBottom_toBottomOf="@id/api_key_label"
+                app:layout_constraintLeft_toRightOf="@id/gpt_model_label"
+                app:layout_constraintTop_toTopOf="@id/api_key_label"
+                tools:text="\@abcdefghijklmnopqrs" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.slidingpanelayout.widget.SlidingPaneLayout>
 </layout>

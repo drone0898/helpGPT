@@ -1,0 +1,25 @@
+
+
+1. Youtube extract transcript
+
+아래 방법으로 모두 불가능해서, 현재로서는 webview를 통해 youtube 영상을 크롤링하는 방법밖에 없다.
+
+
+
+GET request on: http://video.google.com/timedtext?lang={LANG}&v={VIDEOID}
+>>> currently not worked. (23.04.27)
+
+use Youtube API
+(https://developers.google.com/youtube/v3/docs/captions/download)
+>> 비디오 Owner만 사용가능.. not work.
+
+GET https://youtube.googleapis.com/youtube/v3/captions/{VIDEO_ID}?key=[YOUR_API_KEY] HTTP/1.1
+
+Authorization: Bearer [YOUR_ACCESS_TOKEN]
+Accept: application/json
+
+*할당량
+Queries per day = 10,000
+Captions:download = 200단위 사용.
+하루 할당량 50번.
+( 더 큰 할당량 신청 : https://support.google.com/youtube/contact/yt_api_form?hl=ko )

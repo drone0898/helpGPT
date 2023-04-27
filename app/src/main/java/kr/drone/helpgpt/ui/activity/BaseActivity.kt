@@ -36,7 +36,6 @@ abstract class BaseActivity <V: ViewDataBinding, M: BaseViewModel> : AppCompatAc
         initialize()
 
         binding = DataBindingUtil.setContentView(this, getLayoutResourceId())
-        binding.setVariable(BR.activity, this)
         binding.lifecycleOwner = this
         initBinding()
         initEvent()

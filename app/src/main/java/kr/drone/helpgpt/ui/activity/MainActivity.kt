@@ -2,6 +2,7 @@ package kr.drone.helpgpt.ui.activity
 
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.View
 import androidx.activity.viewModels
 import androidx.lifecycle.ViewModelProvider
 import dagger.hilt.android.AndroidEntryPoint
@@ -21,11 +22,16 @@ class MainActivity: BaseActivity<ActivityMainBinding, MainViewModel>() {
     }
 
     override fun initialize() {
-
     }
 
     override fun initBinding() {
-
+        binding.settingsBtn.setOnClickListener {
+            if(binding.settingsSlidePane.isOpen){
+                binding.settingsSlidePane.closePane()
+            } else{
+                binding.settingsSlidePane.openPane()
+            }
+        }
     }
 
     override fun initEvent() {
