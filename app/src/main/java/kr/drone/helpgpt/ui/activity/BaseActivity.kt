@@ -11,8 +11,10 @@ import kr.drone.helpgpt.core.BaseApplication
 import kr.drone.helpgpt.vm.BaseViewModel
 
 import androidx.databinding.library.baseAdapters.BR
-import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.*
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 abstract class BaseActivity <V: ViewDataBinding, M: BaseViewModel> : AppCompatActivity() {
 
@@ -53,6 +55,11 @@ abstract class BaseActivity <V: ViewDataBinding, M: BaseViewModel> : AppCompatAc
     protected abstract fun initEvent() // 이벤트 바인딩
     protected abstract fun getViewModelClass(): Class<M>
 
+    fun LifecycleOwner.repeatOnStarted(block: suspend CoroutineScope.() -> Unit) {
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED, block)
+        }
+    }
 
     /**
      * @param maintain true면 백스택 유지, false면 초기화

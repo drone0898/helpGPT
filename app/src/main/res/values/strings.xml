@@ -4,4 +4,7 @@
     <string name="settings">settings</string>
     <string name="api_key">API Key</string>
     <string name="gpt_model">GPT Model</string>
+    <string name="youtube">Youtube :</string>
+    <string name="write_youtube_address_or_videoid">Write Youtube address or VideoId</string>
+    <string name="summary_start">Summary Start!</string>
 </resources>
