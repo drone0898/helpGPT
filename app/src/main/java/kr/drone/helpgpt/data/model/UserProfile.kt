@@ -32,3 +32,9 @@ data class GptProfileEntity(
     val gptApiKey: String,
     val gptModelVersion: String = ""
 )
+
+fun UserProfile.asUserProfileEntity(): UserProfileEntity =
+    UserProfileEntity(this.userId,this.gptProfile)
+
+fun GptProfile.asGptProfileEntity(): GptProfileEntity =
+    GptProfileEntity(this.gptApiKey,this.gptModelVersion)

@@ -13,5 +13,6 @@ import kr.drone.helpgpt.data.model.UserProfileEntity
     version = 1,
     exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
-
+    abstract fun summaryDao(): SummaryDao
+    abstract fun userProfileDao(): UserProfileDao
 }

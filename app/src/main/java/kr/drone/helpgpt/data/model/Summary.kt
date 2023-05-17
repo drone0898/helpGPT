@@ -30,3 +30,5 @@ data class SummaryList(
 fun List<SummaryEntity>.asSummaryList(): List<Summary> = this.map{
     Summary(it.summaryId,it.videoId,it.origin,it.summary,it.language,it.date)
 }
+fun Summary.asSummaryEntity(): SummaryEntity =
+    SummaryEntity(this.summaryId,this.videoId,this.origin,this.summary,this.language,this.date)
