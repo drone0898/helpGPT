@@ -1,9 +1,11 @@
 package kr.drone.helpgpt.data.local
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kr.drone.helpgpt.data.model.*
 import javax.inject.Inject
 
+@ExperimentalCoroutinesApi
 class LocalDataSource @Inject constructor(
     private val summaryDao: SummaryDao,
     private val userProfileDao: UserProfileDao) {
