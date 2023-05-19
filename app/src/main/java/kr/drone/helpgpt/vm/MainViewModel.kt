@@ -8,10 +8,15 @@ import java.util.regex.Pattern
 
 class MainViewModel(application: Application) : BaseViewModel(application) {
 
+    companion object{
+        const val EVENT_START_CRAWLING = "EVENT_START_CRAWLING"
+    }
+
     val address:StateFlow<String> get() = _address
     var _address = MutableStateFlow("https://www.youtube.com/watch?v=8LdjmJtwdVA")
     val videoId:StateFlow<String> get() = _videoId
     private var _videoId = MutableStateFlow("")
+    val script:MutableStateFlow<String> = MutableStateFlow("")
 
     fun extractVideoIdFromUrl(url:String){
         stopCrawling()
@@ -21,7 +26,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         if (matcher.find()) {
             val videoId = matcher.group(1) as String
             _videoId.value = videoId
-            startCrawling(url, videoId)
+            startCrawling()
         } else {
             _videoId.value = ""
         }
@@ -31,8 +36,8 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
     // youtube 주소를 입력했을때 사용자에게 보이지않는 webview를 통해 자막을 먼저 크롤링하고,
     // 버튼을 눌렀을 때 크롤링한 자막을 전송해 요약처리하도록 구현.
     // 만약 버튼을 눌렀을 때 크롤링이 끝나지않았다면 로딩바가 돌아가도록 처리할 것
-    private fun startCrawling(url: String, videoId:String){
-
+    private fun startCrawling(){
+        _event.value = EVENT_START_CRAWLING
     }
 
     private fun stopCrawling(){

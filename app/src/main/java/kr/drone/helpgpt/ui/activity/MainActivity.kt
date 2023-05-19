@@ -33,6 +33,14 @@ class MainActivity: BaseActivity<ActivityMainBinding, MainViewModel>() {
     }
     override fun initEvent() {
         repeatOnStarted {
+            viewModel.event.collect {
+                when(it) {
+                    MainViewModel.EVENT_START_CRAWLING ->
+                        binding.crawlingWebview.loadUrl(viewModel.address.value)
+                }
+            }
+        }
+        repeatOnStarted {
             viewModel.address.collect {
                 viewModel.extractVideoIdFromUrl(it)
             }
