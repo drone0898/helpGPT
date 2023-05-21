@@ -10,6 +10,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
 
     companion object{
         const val EVENT_START_CRAWLING = "EVENT_START_CRAWLING"
+        const val EVENT_STOP_CRAWLING = "EVENT_STOP_CRAWLING"
     }
 
     val address:StateFlow<String> get() = _address
@@ -41,7 +42,7 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
     }
 
     private fun stopCrawling(){
-
+        _event.value = EVENT_STOP_CRAWLING
     }
 }
 

@@ -1,10 +1,10 @@
 package kr.drone.helpgpt.ui.activity
 
-import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.ActivityMainBinding
+import kr.drone.helpgpt.ui.view.MyWebViewClient
 import kr.drone.helpgpt.vm.MainViewModel
 import timber.log.Timber
 
@@ -30,6 +30,8 @@ class MainActivity: BaseActivity<ActivityMainBinding, MainViewModel>() {
                 binding.settingsSlidePane.openPane()
             }
         }
+        binding.crawlingWebview.webViewClient = MyWebViewClient()
+
     }
     override fun initEvent() {
         repeatOnStarted {

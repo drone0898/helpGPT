@@ -1,14 +1,13 @@
 package kr.drone.helpgpt.data.model
 
-import androidx.room.ColumnInfo
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.*
 import com.google.gson.annotations.SerializedName
+
 
 data class UserProfile(
     @SerializedName("userId")
     val userId: String ="",
-    val gptProfile: GptProfile
+    val gptProfile: GptProfile?
 )
 
 data class GptProfile(
@@ -23,7 +22,7 @@ data class UserProfileEntity(
     @PrimaryKey
     val userId: String,
     @ColumnInfo(name = "gpt_profile")
-    val gptProfile: GptProfile
+    val gptProfile: GptProfile?
 )
 
 @Entity(tableName = "gptProfileTable")
