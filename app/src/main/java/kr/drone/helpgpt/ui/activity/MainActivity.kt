@@ -1,7 +1,11 @@
 package kr.drone.helpgpt.ui.activity
 
+import android.annotation.SuppressLint
+import android.webkit.WebSettings
+import android.webkit.WebView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import kr.drone.helpgpt.BuildConfig
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.ActivityMainBinding
 import kr.drone.helpgpt.ui.view.MyWebViewClient
@@ -22,6 +26,7 @@ class MainActivity: BaseActivity<ActivityMainBinding, MainViewModel>() {
     override fun initialize() {
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun initBinding() {
         binding.settingsBtn.setOnClickListener {
             if(binding.settingsSlidePane.isOpen){
@@ -30,8 +35,19 @@ class MainActivity: BaseActivity<ActivityMainBinding, MainViewModel>() {
                 binding.settingsSlidePane.openPane()
             }
         }
+        if(BuildConfig.DEBUG){
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
         binding.crawlingWebview.webViewClient = MyWebViewClient()
+        binding.crawlingWebview.let {
+            it.settings.mediaPlaybackRequiresUserGesture = true
+            it.settings.domStorageEnabled = true // Sets whether the DOM storage API is enabled.
+            it.settings.allowContentAccess= true
+            it.settings.displayZoomControls = false
+            it.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+            it.settings.javaScriptEnabled= true
 
+        }
     }
     override fun initEvent() {
         repeatOnStarted {
