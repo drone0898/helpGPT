@@ -2,29 +2,17 @@ package kr.drone.helpgpt.ui.activity
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.viewModels
 import androidx.annotation.LayoutRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
 import androidx.databinding.ViewDataBinding
 import kr.drone.helpgpt.core.BaseApplication
-import kr.drone.helpgpt.vm.BaseViewModel
-
-import androidx.databinding.library.baseAdapters.BR
 import androidx.lifecycle.*
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-abstract class BaseActivity <V: ViewDataBinding, M: BaseViewModel> : AppCompatActivity() {
+abstract class BaseActivity <V: ViewDataBinding> : AppCompatActivity() {
 
-    private val viewModelProvider: ViewModelProvider by lazy {
-        ViewModelProvider(this,
-            ViewModelProvider.AndroidViewModelFactory.getInstance(baseApplication))
-    }
-    protected val viewModel: M by lazy {
-        lazyInitViewModel()
-    }
     protected lateinit var binding: V
     protected lateinit var baseApplication: BaseApplication
 
@@ -39,21 +27,22 @@ abstract class BaseActivity <V: ViewDataBinding, M: BaseViewModel> : AppCompatAc
 
         binding = DataBindingUtil.setContentView(this, getLayoutResourceId())
         binding.lifecycleOwner = this
+        bindingViewModel()
         initBinding()
         initEvent()
     }
 
-    private fun lazyInitViewModel():M {
-        val vm = viewModelProvider[getViewModelClass()]
-        binding.setVariable(BR.viewModel, vm)
-        lifecycle.addObserver(vm)
-        return vm
-    }
 
+    protected abstract fun bindingViewModel()
     protected abstract fun initialize() // 초기화
     protected abstract fun initBinding() // 데이터 바인딩
     protected abstract fun initEvent() // 이벤트 바인딩
-    protected abstract fun getViewModelClass(): Class<M>
+
+//    private fun lazyInitViewModel() {
+//        binding.setVariable(BR.viewModel, vm)
+//        lifecycle.addObserver(vm)
+//        return vm
+//    }
 
     fun LifecycleOwner.repeatOnStarted(block: suspend CoroutineScope.() -> Unit) {
         lifecycleScope.launch {

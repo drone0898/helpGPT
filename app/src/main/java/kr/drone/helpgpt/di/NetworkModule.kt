@@ -1,21 +1,22 @@
 package kr.drone.helpgpt.di
 
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonParser
 import com.google.gson.JsonSyntaxException
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
 import kr.drone.helpgpt.BuildConfig
-import kr.drone.helpgpt.data.remote.GptApiService
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import timber.log.Timber
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 
-// https://velog.io/@jmseb3/Android-Sealed-Class-%EB%A5%BC-Retrofit-%ED%86%B5%EC%8B%A0with-Hilt-flow
 @Module
 @InstallIn(SingletonComponent::class)
 class NetworkModule {
@@ -34,15 +35,15 @@ class NetworkModule {
         HttpLoggingInterceptor(object : HttpLoggingInterceptor.Logger {
             override fun log(message: String) {
                 if (!message.startsWith("{") && !message.startsWith("[")) {
-//                    Timber.tag("OkHttp").d(message)
+                    Timber.tag("OkHttp").d(message)
                     return
                 }
                 try {
-//                    Timber.tag("OkHttp").d(
-//                        GsonBuilder().setPrettyPrinting().create().toJson(
-//                        JsonParser().parse(message)))
+                    Timber.tag("OkHttp").d(
+                        GsonBuilder().setPrettyPrinting().create().toJson(
+                            JsonParser.parseString(message)))
                 } catch (m: JsonSyntaxException) {
-//                    Timber.tag("OkHttp").d(message)
+                    Timber.tag("OkHttp").d(message)
                 }
             }
         })
@@ -62,17 +63,40 @@ class NetworkModule {
 
     @Singleton
     @Provides
-    fun provideRetrofit(okHttpClient: OkHttpClient, baseUrl: String): Retrofit {
-        return Retrofit.Builder()
-            .client(okHttpClient)
-            .baseUrl(baseUrl)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
+    fun provideKtorClient(okHttpClient: OkHttpClient): HttpClient {
+        return HttpClient(OkHttp){
+            engine {
+                config{
+                    followRedirects(true)
+                }
+                preconfigured = okHttpClient
+            }
+        }
     }
 
-    @Singleton
-    @Provides
-    fun providePostsService(retrofit: Retrofit): GptApiService {
-        return retrofit.create(GptApiService::class.java)
-    }
+//    fun provideKtorClient(): HttpClient {
+//        return HttpClient(Android){
+//            engine {
+//                connectTimeout = 100_000
+//                socketTimeout = 100_000
+//                proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("localhost",8080))
+//            }
+//        }
+//    }
+
+//    @Singleton
+//    @Provides
+//    fun provideRetrofit(okHttpClient: OkHttpClient, baseUrl: String): Retrofit {
+//        return Retrofit.Builder()
+//            .client(okHttpClient)
+//            .baseUrl(baseUrl)
+//            .addConverterFactory(GsonConverterFactory.create())
+//            .build()
+//    }
+
+//    @Singleton
+//    @Provides
+//    fun providePostsService(retrofit: Retrofit): GptApiService {
+//        return retrofit.create(GptApiService::class.java)
+//    }
 }

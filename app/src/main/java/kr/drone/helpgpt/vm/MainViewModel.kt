@@ -1,18 +1,21 @@
 package kr.drone.helpgpt.vm
 
 import android.app.Application
+import androidx.lifecycle.ViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import timber.log.Timber
 import java.util.regex.Pattern
 
-class MainViewModel(application: Application) : BaseViewModel(application) {
-
+class MainViewModel() : ViewModel() {
     companion object{
         const val EVENT_START_CRAWLING = "EVENT_START_CRAWLING"
         const val EVENT_STOP_CRAWLING = "EVENT_STOP_CRAWLING"
     }
 
+    protected val _event: MutableStateFlow<String> = MutableStateFlow("")
+    val event: StateFlow<String> = _event
     val address:StateFlow<String> get() = _address
     var _address = MutableStateFlow("https://www.youtube.com/watch?v=8LdjmJtwdVA")
     val videoId:StateFlow<String> get() = _videoId
