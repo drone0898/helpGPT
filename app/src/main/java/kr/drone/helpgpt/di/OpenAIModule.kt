@@ -35,6 +35,6 @@ object ApiKeyModule {
     @Provides
     @Named("openAiApiKey")
     fun provideOpenAiApiKey(): String{
-        return ""
+        return "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"
     }
 }

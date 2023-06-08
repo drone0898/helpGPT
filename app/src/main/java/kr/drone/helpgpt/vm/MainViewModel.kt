@@ -22,7 +22,7 @@ class MainViewModel() : ViewModel() {
     private var _videoId = MutableStateFlow("")
     val script:MutableStateFlow<String> = MutableStateFlow("")
 
-    fun extractVideoIdFromUrl(url:String){
+    fun extractVideoIdFromUrl(url:String) {
         stopCrawling()
         val videoIdPattern = "^(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)([\\w-]+)"
         val pattern = Pattern.compile(videoIdPattern)

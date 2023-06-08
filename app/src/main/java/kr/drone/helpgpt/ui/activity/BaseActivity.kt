@@ -46,7 +46,16 @@ abstract class BaseActivity <V: ViewDataBinding> : AppCompatActivity() {
 
     fun LifecycleOwner.repeatOnStarted(block: suspend CoroutineScope.() -> Unit) {
         lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED, block)
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED,block)
+        }
+    }
+    fun LifecycleOwner.repeatsOnStarted(blocks: List<suspend CoroutineScope.() -> Unit>) {
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED){
+                blocks.forEach{block ->
+                    launch{block()}
+                }
+            }
         }
     }
 

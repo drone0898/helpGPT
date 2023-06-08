@@ -5,7 +5,11 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.activity.viewModels
 import androidx.databinding.library.baseAdapters.BR
+import com.google.android.youtube.player.YouTubeInitializationResult
+import com.google.android.youtube.player.YouTubePlayer
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
+import kr.co.prnd.YouTubePlayerView
 import kr.drone.helpgpt.BuildConfig
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.ActivityMainBinding
@@ -16,6 +20,29 @@ import kr.drone.helpgpt.vm.MainViewModel
 class MainActivity: BaseActivity<ActivityMainBinding>() {
 
     val viewModel by viewModels<MainViewModel>()
+    var playerOnInitialized:Boolean = false
+    var pendingVideoId:String? = null
+    private val onInitializedListener = object : YouTubePlayerView.OnInitializedListener {
+        override fun onInitializationSuccess(
+            provider: YouTubePlayer.Provider,
+            player: YouTubePlayer,
+            wasRestored: Boolean
+        ) {
+            playerOnInitialized = true
+            pendingVideoId?.let { videoId ->
+                player.loadVideo(videoId)
+                pendingVideoId = null
+            }
+        }
+
+        override fun onInitializationFailure(
+            provider: YouTubePlayer.Provider,
+            result: YouTubeInitializationResult
+        ) {
+            // Handle initialization failure here
+        }
+    }
+
 
     override fun getLayoutResourceId(): Int {
         return R.layout.activity_main
@@ -31,13 +58,6 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun initBinding() {
-        binding.settingsBtn.setOnClickListener {
-            if(binding.settingsSlidePane.isOpen){
-                binding.settingsSlidePane.closePane()
-            } else{
-                binding.settingsSlidePane.openPane()
-            }
-        }
         if(BuildConfig.DEBUG){
             WebView.setWebContentsDebuggingEnabled(true)
         }
@@ -50,33 +70,46 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
             it.settings.cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             it.settings.javaScriptEnabled= true
         }
+        binding.settingsBtn.setOnClickListener {
+            if(binding.settingsSlidePane.isOpen){
+                binding.settingsSlidePane.closePane()
+            } else{
+                binding.settingsSlidePane.openPane()
+            }
+        }
         binding.summaryBtn.setOnClickListener{
             startTargetActivity(SummaryProcActivity::class.java,null,true)
         }
+        binding.youTubePlayerView.onInitializedListener = onInitializedListener
     }
     override fun initEvent() {
-        repeatOnStarted {
-//            viewModel.event.collect {
-//                when(it) {
-//                    MainViewModel.EVENT_START_CRAWLING ->
-//                        binding.crawlingWebview.loadUrl(viewModel.address.value)
-//                }
-//            }
-        }
-        repeatOnStarted {
-            viewModel.address.collect {
-                viewModel.extractVideoIdFromUrl(it)
-            }
-        }
-        repeatOnStarted {
-            viewModel.videoId.collect{
-                if(it != ""){
-//                    binding.youTubePlayerView.invalidate()
-//                    delay(100L)
-//                    binding.youTubePlayerView.play(it)
-//                    Timber.d("play video $it")
+        repeatsOnStarted (
+            listOf(
+                {
+                    viewModel.event.collect {
+                        when (it) {
+                            MainViewModel.EVENT_START_CRAWLING ->
+                                binding.crawlingWebview.loadUrl(viewModel.address.value)
+                        }
+                    }
+                },
+                {
+                    viewModel.address.collect {
+                        viewModel.extractVideoIdFromUrl(it)
+                    }
+                },
+                {
+                    viewModel.videoId.collectLatest {
+                        if (it != "") {
+                            if(playerOnInitialized){
+                                binding.youTubePlayerView.play(it)
+                            }else{
+                                pendingVideoId = it
+                            }
+                        }
+                    }
                 }
-            }
-        }
+            )
+        )
     }
 }
