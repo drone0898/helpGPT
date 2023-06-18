@@ -10,11 +10,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kr.drone.helpgpt.data.remote.ApiResult
+import kr.drone.helpgpt.di.ApiKeyProvider
+import kr.drone.helpgpt.di.OpenAIFactory
 import retrofit2.HttpException
 import javax.inject.Inject
 
 @OptIn(BetaOpenAI::class)
-class OpenAIRepository @Inject constructor(private val openAI: OpenAI) {
+class OpenAIRepository @Inject constructor(
+    private val openAIFactory: OpenAIFactory,
+    private val apiKeyProvider: ApiKeyProvider
+) {
+    private var openAI: OpenAI = openAIFactory.createOpenAI()
+
+    fun updateApiKey(newApiKey: String) {
+        apiKeyProvider.apiKey = newApiKey
+        openAI = openAIFactory.createOpenAI()
+    }
     suspend fun createTextCompletion(prompt: String, modelId: String = "gpt-3.5-turbo"): TextCompletion {
         val completionRequest = CompletionRequest(
             model = ModelId(modelId),

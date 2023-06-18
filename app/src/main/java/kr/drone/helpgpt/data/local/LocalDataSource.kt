@@ -14,6 +14,10 @@ class LocalDataSource @Inject constructor(
         return summaryDao.saveSummary(summary.asSummaryEntity())
     }
 
+    suspend fun getUserProfile(): UserProfile{
+        return userProfileDao.getUserProfile()
+    }
+
     suspend fun saveUserProfile(userProfile: UserProfile){
         return userProfileDao.saveUserProfile(userProfile.asUserProfileEntity())
     }

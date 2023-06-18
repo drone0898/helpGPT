@@ -11,12 +11,13 @@ import kr.drone.helpgpt.data.model.GptProfileEntity
 import kr.drone.helpgpt.data.model.SummaryEntity
 import kr.drone.helpgpt.data.model.UserProfileEntity
 
+
 @Database(
     entities = [
     UserProfileEntity::class,
     GptProfileEntity::class,
     SummaryEntity::class
-                     ],
+               ],
     version = 1,
     exportSchema = false)
 @TypeConverters(GptProfileConverter::class)

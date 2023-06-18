@@ -8,8 +8,8 @@ import kr.drone.helpgpt.data.model.UserProfileEntity
 
 @Dao
 interface UserProfileDao {
-    @Query("SELECT * FROM userProfileTable")
-    suspend fun getUserProfile(): List<UserProfile>
+    @Query("SELECT * FROM userProfileTable LIMIT 1")
+    suspend fun getUserProfile(): UserProfile
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveUserProfile(userProfile: UserProfileEntity)
