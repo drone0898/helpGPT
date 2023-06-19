@@ -1,13 +1,18 @@
 package kr.drone.helpgpt.di
 
 import android.content.Context
+import dagger.Module
 import dagger.Provides
+import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
 import kr.drone.helpgpt.data.local.AppDatabase
 import kr.drone.helpgpt.data.local.SummaryDao
 import kr.drone.helpgpt.data.local.UserProfileDao
 import javax.inject.Singleton
 
+@InstallIn(SingletonComponent::class)
+@Module
 class DatabaseModule {
     @Singleton
     @Provides

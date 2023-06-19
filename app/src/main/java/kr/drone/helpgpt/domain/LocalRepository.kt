@@ -7,9 +7,9 @@ import kr.drone.helpgpt.data.model.Summary
 import kr.drone.helpgpt.data.model.UserProfile
 import javax.inject.Inject
 
-@ExperimentalCoroutinesApi
 @ActivityRetainedScoped
-class LocalRepository @Inject constructor(
+class LocalRepository @OptIn(ExperimentalCoroutinesApi::class)
+@Inject constructor(
     private val localDataSource: LocalDataSource
 ): SummaryRepository, UserProfileRepository {
     override suspend fun getAllSummary(): List<Summary> {
@@ -20,10 +20,12 @@ class LocalRepository @Inject constructor(
         TODO("Not yet implemented")
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun getProfile(): UserProfile {
         return localDataSource.getUserProfile()
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun saveUserProfile(profile: UserProfile){
         localDataSource.saveUserProfile(profile)
     }

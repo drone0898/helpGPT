@@ -44,7 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                             super.onCreate(db)
                             CoroutineScope(Dispatchers.IO).launch(Dispatchers.Main){
                                 getInstance(context).userProfileDao().saveUserProfile(
-                                    UserProfileEntity("",null)
+                                    UserProfileEntity("",GptProfile("",""))
                                 )
                             }
                         }
