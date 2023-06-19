@@ -49,20 +49,23 @@ android {
 
 dependencies {
 
-    implementation 'androidx.core:core-ktx:1.10.0'
+    implementation 'androidx.core:core-ktx:1.10.1'
 
     // activity / fragments
-    implementation 'androidx.fragment:fragment-ktx:1.5.6'
-    implementation 'androidx.activity:activity-ktx:1.7.0'
+    implementation 'androidx.fragment:fragment-ktx:1.6.0'
+    implementation 'androidx.activity:activity-ktx:1.7.2'
+
+    //android x
+    implementation "androidx.work:work-runtime-ktx:2.8.1"
 
     // log
     implementation 'com.jakewharton.timber:timber:5.0.1'
 
     // Views
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.8.0'
+    implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.1'
-    implementation 'androidx.activity:activity-compose:1.7.0'
+    implementation 'androidx.activity:activity-compose:1.7.2'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.slidingpanelayout:slidingpanelayout:1.2.0'
     implementation 'kr.co.prnd:youtube-player-view:1.4.1'
@@ -75,13 +78,13 @@ dependencies {
     implementation "com.squareup.okhttp3:mockwebserver:4.7.2"
 
     // Coroutines
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1"
 
     // retrofit & okhttp3
     implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
-    implementation 'com.google.code.gson:gson:2.8.9'
-    implementation 'com.squareup.okhttp3:okhttp:4.7.2'
+    implementation 'com.google.code.gson:gson:2.9.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.11.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.7.2'
 
     //ktor
@@ -90,6 +93,7 @@ dependencies {
 
     // hilt
     implementation "com.google.dagger:hilt-android:2.44"
+    implementation 'androidx.core:core-ktx:1.10.1'
     kapt "com.google.dagger:hilt-compiler:2.44"
 
     // room

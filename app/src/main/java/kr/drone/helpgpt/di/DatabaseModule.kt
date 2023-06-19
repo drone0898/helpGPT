@@ -1,6 +1,27 @@
 package kr.drone.helpgpt.di
 
+import android.content.Context
+import dagger.Provides
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kr.drone.helpgpt.data.local.AppDatabase
+import kr.drone.helpgpt.data.local.SummaryDao
+import kr.drone.helpgpt.data.local.UserProfileDao
+import javax.inject.Singleton
+
 class DatabaseModule {
-    // todo :: 초기 데이터 입력 구현 필요 아래 참조.
-    // https://medium.com/androiddevelopers/7-pro-tips-for-room-fbadea4bfbd1#4785
+    @Singleton
+    @Provides
+    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        return AppDatabase.getInstance(context)
+    }
+
+    @Provides
+    fun provideSummaryDao(appDatabase: AppDatabase): SummaryDao {
+        return appDatabase.summaryDao()
+    }
+
+    @Provides
+    fun provideUserProfileDao(appDatabase: AppDatabase): UserProfileDao {
+        return appDatabase.userProfileDao()
+    }
 }
