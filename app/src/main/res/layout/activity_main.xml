@@ -57,16 +57,55 @@ xmlns:tools="http://schemas.android.com/tools">
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/summary_start"
+                android:visibility="@{viewModel.summaryBtnVisibility}"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/youtube_edit_text"
                 android:layout_marginTop="16dp"/>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/translate_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/translate"
+                android:visibility="@{viewModel.translateBtnVisibility}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/summary_btn"
+                android:layout_marginTop="16dp"/>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/translate_text_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/translate_result"
+                tools:text="@string/translate_result"
+                android:visibility="@{viewModel.translateVisibility}"
+                app:layout_constraintTop_toBottomOf="@id/youtube_edit_text"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="16dp"/>
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/translate_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@{viewModel.translateResultText}"
+                tools:text=""
+                android:visibility="@{viewModel.translateVisibility}"
+                app:layout_constraintTop_toBottomOf="@id/translate_text_label"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                android:layout_marginTop="16dp"/>
+
+
+
             <WebView
                 android:id="@+id/crawling_webview"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                app:layout_constraintTop_toBottomOf="@id/summary_btn"
+                android:visibility="gone"
+                app:layout_constraintTop_toBottomOf="@id/translate_btn"
                 android:paddingTop="16dp"
                 app:layout_constraintBottom_toBottomOf="parent"/>
 

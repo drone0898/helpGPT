@@ -21,7 +21,10 @@ class OpenAIFactory @Inject constructor(private val apiKeyProvider: ApiKeyProvid
     }
 }
 
+@Singleton
 class ApiKeyProvider @Inject constructor() {
+    // apiKey의 상태가 업데이트 되기 때문에 Singleton이어야 함.
+    // 또한 앱이 종료되면 apiKeyrkqt 역시 초기화되기 때문에 Provider는 항상 db에서 불러온 apiKey 최신데이터를 제공해야함
     var apiKey: String = ""
 }
 

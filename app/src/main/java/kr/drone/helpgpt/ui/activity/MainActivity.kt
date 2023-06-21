@@ -1,12 +1,18 @@
 package kr.drone.helpgpt.ui.activity
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.media.projection.MediaProjectionManager
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.databinding.library.baseAdapters.BR
 import com.google.android.youtube.player.YouTubeInitializationResult
 import com.google.android.youtube.player.YouTubePlayer
+import com.gun0912.tedpermission.PermissionListener
+import com.gun0912.tedpermission.normal.TedPermission
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kr.co.prnd.YouTubePlayerView
@@ -15,6 +21,7 @@ import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.ActivityMainBinding
 import kr.drone.helpgpt.ui.view.MyWebViewClient
 import kr.drone.helpgpt.vm.MainViewModel
+
 
 @AndroidEntryPoint
 class MainActivity: BaseActivity<ActivityMainBinding>() {
@@ -78,9 +85,44 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
             }
         }
         binding.summaryBtn.setOnClickListener{
-            startTargetActivity(SummaryProcActivity::class.java,null,true)
+            viewModel.onSummaryBtnClick()
+        }
+
+        binding.translateBtn.setOnClickListener{
+            viewModel.onTranslateBtnClick()
+            checkRequestedPermission {
+                startCaptureIntent()
+            }
         }
         binding.youTubePlayerView.onInitializedListener = onInitializedListener
+    }
+
+    private fun startCaptureIntent() {
+        val mediaProjectionManager =
+            applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+//        startActivityForResult(
+//            mediaProjectionManager.createScreenCaptureIntent(),
+//            MEDIA_PROJECTION_REQUEST_CODE
+//        )
+    }
+    private fun checkRequestedPermission(granted: ()->Unit){
+        TedPermission.create()
+            .setPermissionListener(object : PermissionListener {
+                override fun onPermissionGranted() {
+                    granted()
+                }
+
+                override fun onPermissionDenied(deniedPermissions: List<String>) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Permission Denied\n$deniedPermissions",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            })
+            .setPermissions(
+                Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO
+            ).check()
     }
     override fun initEvent() {
         repeatsOnStarted (
@@ -88,8 +130,8 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
                 {
                     viewModel.event.collect {
                         when (it) {
-                            MainViewModel.EVENT_START_CRAWLING ->
-                                binding.crawlingWebview.loadUrl(viewModel.address.value)
+//                            MainViewModel.EVENT_START_CRAWLING ->
+//                                binding.crawlingWebview.loadUrl(viewModel.address.value)
                         }
                     }
                 },

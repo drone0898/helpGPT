@@ -1,26 +1,38 @@
 package kr.drone.helpgpt.vm
 
-import android.app.Application
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import timber.log.Timber
+import kr.drone.helpgpt.util.VIEW_GONE
+import kr.drone.helpgpt.util.VIEW_VISIBLE
 import java.util.regex.Pattern
+import javax.inject.Inject
 
-class MainViewModel() : ViewModel() {
+@HiltViewModel
+@Suppress("PropertyName")
+class MainViewModel @Inject constructor(
+
+) : ViewModel() {
     companion object{
         const val EVENT_START_CRAWLING = "EVENT_START_CRAWLING"
         const val EVENT_STOP_CRAWLING = "EVENT_STOP_CRAWLING"
     }
 
-    protected val _event: MutableStateFlow<String> = MutableStateFlow("")
+    private val _videoId = MutableStateFlow("")
+    val _address = MutableStateFlow("https://www.youtube.com/watch?v=8LdjmJtwdVA")
+    private val _event: MutableStateFlow<String> = MutableStateFlow("")
+    val summaryBtnVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_VISIBLE)
+    val summaryVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_GONE)
+    val translateBtnVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_VISIBLE)
+    val translateVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_GONE)
+    val translateResultText: MutableStateFlow<String> = MutableStateFlow("")
+
     val event: StateFlow<String> = _event
     val address:StateFlow<String> get() = _address
-    var _address = MutableStateFlow("https://www.youtube.com/watch?v=8LdjmJtwdVA")
     val videoId:StateFlow<String> get() = _videoId
-    private var _videoId = MutableStateFlow("")
     val script:MutableStateFlow<String> = MutableStateFlow("")
+
 
     fun extractVideoIdFromUrl(url:String) {
         stopCrawling()
@@ -46,6 +58,21 @@ class MainViewModel() : ViewModel() {
 
     private fun stopCrawling(){
         _event.value = EVENT_STOP_CRAWLING
+    }
+
+    fun onSummaryBtnClick(){
+        summaryVisibility.value = VIEW_VISIBLE
+        hideBtn()
+    }
+
+    fun onTranslateBtnClick(){
+        translateVisibility.value = VIEW_VISIBLE
+        hideBtn()
+    }
+
+    private fun hideBtn(){
+        translateBtnVisibility.value = VIEW_GONE
+        summaryBtnVisibility.value = VIEW_GONE
     }
 }
 

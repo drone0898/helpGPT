@@ -34,6 +34,7 @@ class SummaryProcActivity: BaseActivity<ActivitySummaryProcBinding>() {
         repeatOnStarted {
             viewModel.testOpenAI("hello their").collect {
                 Timber.d(it.toString())
+
             }
         }
     }
