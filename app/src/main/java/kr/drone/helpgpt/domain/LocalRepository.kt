@@ -7,7 +7,6 @@ import kr.drone.helpgpt.data.model.Summary
 import kr.drone.helpgpt.data.model.UserProfile
 import javax.inject.Inject
 
-@ActivityRetainedScoped
 class LocalRepository @OptIn(ExperimentalCoroutinesApi::class)
 @Inject constructor(
     private val localDataSource: LocalDataSource

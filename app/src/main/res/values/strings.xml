@@ -9,4 +9,7 @@
     <string name="summary_start">Summary Start!</string>
     <string name="translate">Translate</string>
     <string name="translate_result">번역 결과</string>
+
+    <string name="recordForTranslate">번역을 위해 녹음 중 입니다.</string>
+    <string name="stopRecord">녹음 정지</string>
 </resources>

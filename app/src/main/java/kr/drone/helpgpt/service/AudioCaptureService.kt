@@ -4,30 +4,39 @@ import android.Manifest
 import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioPlaybackCaptureConfiguration
-import android.media.AudioRecord
+import android.media.*
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import dagger.hilt.android.AndroidEntryPoint
+import kr.drone.helpgpt.R
+import kr.drone.helpgpt.domain.LocalRepository
+import kr.drone.helpgpt.domain.OpenAIRepository
 import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import javax.inject.Inject
 import kotlin.concurrent.thread
 import kotlin.experimental.and
 
+@AndroidEntryPoint
 //https://github.com/julioz/AudioCaptureSample
 class AudioCaptureService : Service() {
+
+    @Inject
+    lateinit var openAIRepository: OpenAIRepository
+    @Inject
+    lateinit var localRepository: LocalRepository
 
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private var mediaProjection: MediaProjection? = null
@@ -35,12 +44,35 @@ class AudioCaptureService : Service() {
     private lateinit var audioCaptureThread: Thread
     private var audioRecord: AudioRecord? = null
 
+    lateinit var audioOutputFile:File
+    lateinit var audioCompressedFile:File
+
+    interface OnAudioCreatedListener {
+        fun onAudioCreated(file: File)
+    }
+    var audioCreatedListener: OnAudioCreatedListener? = null
+
     override fun onCreate() {
         super.onCreate()
+        val stopAction = Intent(
+            this, AudioCaptureService::class.java).apply { action = ACTION_STOP }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_CANCEL_CURRENT
+        }
+        val closePending:PendingIntent = PendingIntent.getService(this,0,
+            stopAction, flags)
+
+        val notiBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.round_fiber_manual_record_24)
+            .setContentTitle(getString(R.string.recordForTranslate))
+            .addAction(R.drawable.round_stop_24,getString(R.string.stopRecord),closePending)
         createNotificationChannel()
+
         startForeground(
             SERVICE_ID,
-            NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID).build()
+            notiBuilder.build()
         )
 
         // use applicationContext to avoid memory leak on Android 10.
@@ -64,22 +96,30 @@ class AudioCaptureService : Service() {
         return if (intent != null) {
             when (intent.action) {
                 ACTION_START -> {
-                    mediaProjection =
-                        mediaProjectionManager.getMediaProjection(
-                            Activity.RESULT_OK,
-                            intent.getParcelableExtra(EXTRA_RESULT_DATA)!!
-                        ) as MediaProjection
-                    startAudioCapture()
-                    Service.START_STICKY
+                    val extra =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+                        } else {
+                            intent.getParcelableExtra(EXTRA_RESULT_DATA)
+                        }
+                    if(extra!=null){
+                        mediaProjection =
+                            mediaProjectionManager.getMediaProjection(
+                                Activity.RESULT_OK,
+                                extra
+                            ) as MediaProjection
+                        startAudioCapture()
+                    }
+                    START_STICKY
                 }
                 ACTION_STOP -> {
                     stopAudioCapture()
-                    Service.START_NOT_STICKY
+                    START_NOT_STICKY
                 }
                 else -> throw IllegalArgumentException("Unexpected action received: ${intent.action}")
             }
         } else {
-            Service.START_NOT_STICKY
+            START_NOT_STICKY
         }
     }
 
@@ -130,17 +170,15 @@ class AudioCaptureService : Service() {
 
             audioRecord!!.startRecording()
             audioCaptureThread = thread(start = true) {
-                val outputFile = createAudioFile()
-                Timber.d(LOG_TAG, "Created file for capture target: ${outputFile.absolutePath}")
-                writeAudioToFile(outputFile)
+                audioOutputFile = createAudioFile()
+                Timber.d("Created file for capture target: ${audioOutputFile.absolutePath}")
+                writeAudioToFile(audioOutputFile)
             }
         }
-
-
     }
 
     private fun createAudioFile(): File {
-        val audioCapturesDirectory = File(getExternalFilesDir(null), "/AudioCaptures")
+        val audioCapturesDirectory = File(cacheDir, AudioOriginDIR)
         if (!audioCapturesDirectory.exists()) {
             audioCapturesDirectory.mkdirs()
         }
@@ -169,7 +207,7 @@ class AudioCaptureService : Service() {
         }
 
         fileOutputStream.close()
-        Timber.d(LOG_TAG, "Audio capture finished for ${outputFile.absolutePath}. File size is ${outputFile.length()} bytes.")
+        Timber.d("Audio capture finished for ${outputFile.absolutePath}. File size is ${outputFile.length()} bytes.")
     }
 
     private fun stopAudioCapture() {
@@ -184,6 +222,18 @@ class AudioCaptureService : Service() {
 
         mediaProjection!!.stop()
         stopSelf()
+    }
+
+    private fun compressAudioFile(){
+        val mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, 44100, 2)
+        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, 128000)
+
+        val mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+        mediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        mediaCodec.start()
+
+
     }
 
     override fun onBind(p0: Intent?): IBinder? = null
@@ -212,5 +262,7 @@ class AudioCaptureService : Service() {
         const val ACTION_START = "AudioCaptureService:Start"
         const val ACTION_STOP = "AudioCaptureService:Stop"
         const val EXTRA_RESULT_DATA = "AudioCaptureService:Extra:ResultData"
+        const val AudioOriginDIR = "/AudioCaptures"
+        const val AudioCompressDIR = "/AudioCompress"
     }
 }

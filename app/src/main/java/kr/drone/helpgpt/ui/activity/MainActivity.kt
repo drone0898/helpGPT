@@ -2,11 +2,15 @@ package kr.drone.helpgpt.ui.activity
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.databinding.library.baseAdapters.BR
 import com.google.android.youtube.player.YouTubeInitializationResult
@@ -19,6 +23,7 @@ import kr.co.prnd.YouTubePlayerView
 import kr.drone.helpgpt.BuildConfig
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.ActivityMainBinding
+import kr.drone.helpgpt.service.AudioCaptureService
 import kr.drone.helpgpt.ui.view.MyWebViewClient
 import kr.drone.helpgpt.vm.MainViewModel
 
@@ -29,6 +34,25 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
     val viewModel by viewModels<MainViewModel>()
     var playerOnInitialized:Boolean = false
     var pendingVideoId:String? = null
+
+    private val requestSelectInContact: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == Activity.RESULT_OK) {
+                val audioCaptureIntent = Intent(this, AudioCaptureService::class.java).apply {
+                    action = AudioCaptureService.ACTION_START
+                    if(it.data!=null){
+                        putExtra(AudioCaptureService.EXTRA_RESULT_DATA, it.data)
+                    }
+                }
+                startForegroundService(audioCaptureIntent)
+            } else {
+                Toast.makeText(
+                    this, "Request to obtain MediaProjection denied.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
     private val onInitializedListener = object : YouTubePlayerView.OnInitializedListener {
         override fun onInitializationSuccess(
             provider: YouTubePlayer.Provider,
@@ -57,7 +81,6 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
 
     override fun bindingViewModel() {
         binding.setVariable(BR.viewModel, viewModel)
-//        lifecycle.addObserver(viewModel)
     }
 
     override fun initialize() {
@@ -100,10 +123,7 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
     private fun startCaptureIntent() {
         val mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-//        startActivityForResult(
-//            mediaProjectionManager.createScreenCaptureIntent(),
-//            MEDIA_PROJECTION_REQUEST_CODE
-//        )
+        requestSelectInContact.launch(mediaProjectionManager.createScreenCaptureIntent())
     }
     private fun checkRequestedPermission(granted: ()->Unit){
         TedPermission.create()

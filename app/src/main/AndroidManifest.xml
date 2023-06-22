@@ -23,6 +23,9 @@
         <activity android:name=".ui.activity.MainActivity"/>
         <activity android:name=".ui.activity.SummaryProcActivity"/>
         <activity android:name=".ui.activity.TranslateActivity"/>
+        <service android:name=".service.AudioCaptureService"
+            android:enabled="true"
+            android:foregroundServiceType="mediaProjection"/>
     </application>
 
 
