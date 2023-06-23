@@ -17,11 +17,13 @@ import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.*
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.domain.LocalRepository
 import kr.drone.helpgpt.domain.OpenAIRepository
 import timber.log.Timber
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
@@ -46,6 +48,9 @@ class AudioCaptureService : Service() {
 
     lateinit var audioOutputFile:File
     lateinit var audioCompressedFile:File
+
+    private val job = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + job)
 
     interface OnAudioCreatedListener {
         fun onAudioCreated(file: File)
@@ -80,6 +85,12 @@ class AudioCaptureService : Service() {
         mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        job.cancel()
+    }
+
 
     private fun createNotificationChannel() {
         val serviceChannel = NotificationChannel(
@@ -170,20 +181,20 @@ class AudioCaptureService : Service() {
 
             audioRecord!!.startRecording()
             audioCaptureThread = thread(start = true) {
-                audioOutputFile = createAudioFile()
+                audioOutputFile = createAudioFile(AudioOriginDIR,"pcm")
                 Timber.d("Created file for capture target: ${audioOutputFile.absolutePath}")
                 writeAudioToFile(audioOutputFile)
             }
         }
     }
 
-    private fun createAudioFile(): File {
-        val audioCapturesDirectory = File(cacheDir, AudioOriginDIR)
+    private fun createAudioFile(dir:String, filenameExt:String): File {
+        val audioCapturesDirectory = File(cacheDir, dir)
         if (!audioCapturesDirectory.exists()) {
             audioCapturesDirectory.mkdirs()
         }
         val timestamp = SimpleDateFormat("dd-MM-yyyy-hh-mm-ss", Locale.US).format(Date())
-        val fileName = "Capture-$timestamp.pcm"
+        val fileName = "Capture-$timestamp.$filenameExt"
         return File(audioCapturesDirectory.absolutePath + "/" + fileName)
     }
 
@@ -221,19 +232,70 @@ class AudioCaptureService : Service() {
         audioRecord = null
 
         mediaProjection!!.stop()
-        stopSelf()
+
+        serviceScope.launch {
+            compressAudioFile()
+            stopSelf()
+        }
     }
 
-    private fun compressAudioFile(){
+    private suspend fun compressAudioFile(): File = withContext(Dispatchers.IO) {
+
         val mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, 44100, 2)
         mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
         mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, 128000)
 
         val mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+
         mediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+
+        val fileChannel = FileInputStream(audioOutputFile).channel
+        audioCompressedFile = createAudioFile(AudioCompressDIR, "m4a")
+        val outputStream = FileOutputStream(audioCompressedFile)
+
+        mediaCodec.setCallback(object : MediaCodec.Callback() {
+
+            override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
+                val buffer = codec.getInputBuffer(index)
+                val bytesRead = fileChannel.read(buffer)
+                if (bytesRead < 0) {
+                    codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                } else {
+                    codec.queueInputBuffer(index, 0, bytesRead, System.nanoTime(), 0)
+                }
+            }
+
+            override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
+                Timber.e("MediaCodec onError: ", e)
+                cleanup()
+            }
+
+            override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
+                Timber.d("MediaCodec onOutputFormatChanged")
+            }
+
+            override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
+                val outBuffer = ByteArray(info.size)
+                val outputBuffer = codec.getOutputBuffer(index)
+                outputBuffer?.get(outBuffer)
+                outputStream.write(outBuffer)
+                codec.releaseOutputBuffer(index, false)
+                if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    cleanup()
+                }
+            }
+
+            fun cleanup() {
+                mediaCodec.stop()
+                mediaCodec.release()
+                fileChannel.close()
+                outputStream.close()
+            }
+        })
+
         mediaCodec.start()
 
-
+        return@withContext audioCompressedFile
     }
 
     override fun onBind(p0: Intent?): IBinder? = null
