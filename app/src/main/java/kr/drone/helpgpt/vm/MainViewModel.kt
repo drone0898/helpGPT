@@ -1,18 +1,25 @@
 package kr.drone.helpgpt.vm
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.aallam.openai.api.BetaOpenAI
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
+import kr.drone.helpgpt.domain.OpenAIRepository
 import kr.drone.helpgpt.util.VIEW_GONE
 import kr.drone.helpgpt.util.VIEW_VISIBLE
+import timber.log.Timber
 import java.util.regex.Pattern
 import javax.inject.Inject
 
+@OptIn(BetaOpenAI::class)
 @HiltViewModel
 @Suppress("PropertyName")
 class MainViewModel @Inject constructor(
-
+    openAIRepository: OpenAIRepository
 ) : ViewModel() {
     companion object{
         const val EVENT_START_CRAWLING = "EVENT_START_CRAWLING"
@@ -33,16 +40,27 @@ class MainViewModel @Inject constructor(
     val videoId:StateFlow<String> get() = _videoId
     val script:MutableStateFlow<String> = MutableStateFlow("")
 
+    val translatedText: MutableStateFlow<String?> = MutableStateFlow(null)
+
+    init {
+        viewModelScope.launch {
+            openAIRepository.compressedAudioFile.filterNotNull().collect {
+                translatedText.value = openAIRepository.transcriptionRequest(it).text
+            }
+        }
+    }
+
+
 
     fun extractVideoIdFromUrl(url:String) {
-        stopCrawling()
+//        stopCrawling()
         val videoIdPattern = "^(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)([\\w-]+)"
         val pattern = Pattern.compile(videoIdPattern)
         val matcher = pattern.matcher(url)
         if (matcher.find()) {
             val videoId = matcher.group(1) as String
             _videoId.value = videoId
-            startCrawling()
+//            startCrawling()
         } else {
             _videoId.value = ""
         }

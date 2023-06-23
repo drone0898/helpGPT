@@ -37,8 +37,6 @@ class AudioCaptureService : Service() {
 
     @Inject
     lateinit var openAIRepository: OpenAIRepository
-    @Inject
-    lateinit var localRepository: LocalRepository
 
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private var mediaProjection: MediaProjection? = null
@@ -51,11 +49,6 @@ class AudioCaptureService : Service() {
 
     private val job = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + job)
-
-    interface OnAudioCreatedListener {
-        fun onAudioCreated(file: File)
-    }
-    var audioCreatedListener: OnAudioCreatedListener? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -148,7 +141,7 @@ class AudioCaptureService : Service() {
          * These can be changed according to your application's needs
          */
         val audioFormat = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setEncoding(AudioFormat.ENCODING_AAC_LC)
             .setSampleRate(8000)
             .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
             .build()
@@ -180,9 +173,8 @@ class AudioCaptureService : Service() {
                 .build()
 
             audioRecord!!.startRecording()
-            audioCaptureThread = thread(start = true) {
-                audioOutputFile = createAudioFile(AudioOriginDIR,"pcm")
-                Timber.d("Created file for capture target: ${audioOutputFile.absolutePath}")
+            serviceScope.launch {
+                audioOutputFile = createAudioFile(AudioOriginDIR,"m4a")
                 writeAudioToFile(audioOutputFile)
             }
         }
@@ -195,7 +187,9 @@ class AudioCaptureService : Service() {
         }
         val timestamp = SimpleDateFormat("dd-MM-yyyy-hh-mm-ss", Locale.US).format(Date())
         val fileName = "Capture-$timestamp.$filenameExt"
-        return File(audioCapturesDirectory.absolutePath + "/" + fileName)
+        val file = File(audioCapturesDirectory.absolutePath + "/" + fileName)
+        Timber.d("Created File : ${file.absolutePath}/$fileName")
+        return file
     }
 
     private fun writeAudioToFile(outputFile: File) {
@@ -204,11 +198,6 @@ class AudioCaptureService : Service() {
 
         while (!audioCaptureThread.isInterrupted) {
             audioRecord?.read(capturedAudioSamples, 0, NUM_SAMPLES_PER_READ)
-
-            // This loop should be as fast as possible to avoid artifacts in the captured audio
-            // You can uncomment the following line to see the capture samples but
-            // that will incur a performance hit due to logging I/O.
-            // Log.v(LOG_TAG, "Audio samples captured: ${capturedAudioSamples.toList()}")
 
             fileOutputStream.write(
                 capturedAudioSamples.toByteArray(),
@@ -234,7 +223,9 @@ class AudioCaptureService : Service() {
         mediaProjection!!.stop()
 
         serviceScope.launch {
-            compressAudioFile()
+//            openAIRepository.compressedAudioFile.emit(compressAudioFile())
+            openAIRepository.compressedAudioFile.emit(audioOutputFile)
+            Timber.d("AudioCaptureService stop self()")
             stopSelf()
         }
     }
@@ -297,9 +288,6 @@ class AudioCaptureService : Service() {
 
         return@withContext audioCompressedFile
     }
-
-    override fun onBind(p0: Intent?): IBinder? = null
-
     private fun ShortArray.toByteArray(): ByteArray {
         // Samples get translated into bytes following little-endianness:
         // least significant byte first and the most significant byte last
@@ -311,6 +299,8 @@ class AudioCaptureService : Service() {
         }
         return bytes
     }
+
+    override fun onBind(p0: Intent?): IBinder? = null
 
     companion object {
         private const val LOG_TAG = "AudioCaptureService"

@@ -53,28 +53,6 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
             }
         }
 
-    private val onInitializedListener = object : YouTubePlayerView.OnInitializedListener {
-        override fun onInitializationSuccess(
-            provider: YouTubePlayer.Provider,
-            player: YouTubePlayer,
-            wasRestored: Boolean
-        ) {
-            playerOnInitialized = true
-            pendingVideoId?.let { videoId ->
-                player.loadVideo(videoId)
-                pendingVideoId = null
-            }
-        }
-
-        override fun onInitializationFailure(
-            provider: YouTubePlayer.Provider,
-            result: YouTubeInitializationResult
-        ) {
-            // Handle initialization failure here
-        }
-    }
-
-
     override fun getLayoutResourceId(): Int {
         return R.layout.activity_main
     }
@@ -91,8 +69,8 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
         if(BuildConfig.DEBUG){
             WebView.setWebContentsDebuggingEnabled(true)
         }
-        binding.crawlingWebview.webViewClient = MyWebViewClient()
-        binding.crawlingWebview.let {
+        binding.youtubeWebview.webViewClient = MyWebViewClient()
+        binding.youtubeWebview.let {
             it.settings.mediaPlaybackRequiresUserGesture = true
             it.settings.domStorageEnabled = true // Sets whether the DOM storage API is enabled.
             it.settings.allowContentAccess= true
@@ -117,7 +95,6 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
                 startCaptureIntent()
             }
         }
-        binding.youTubePlayerView.onInitializedListener = onInitializedListener
     }
 
     private fun startCaptureIntent() {
@@ -148,14 +125,6 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
         repeatsOnStarted (
             listOf(
                 {
-                    viewModel.event.collect {
-                        when (it) {
-//                            MainViewModel.EVENT_START_CRAWLING ->
-//                                binding.crawlingWebview.loadUrl(viewModel.address.value)
-                        }
-                    }
-                },
-                {
                     viewModel.address.collect {
                         viewModel.extractVideoIdFromUrl(it)
                     }
@@ -163,11 +132,7 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
                 {
                     viewModel.videoId.collectLatest {
                         if (it != "") {
-                            if(playerOnInitialized){
-                                binding.youTubePlayerView.play(it)
-                            }else{
-                                pendingVideoId = it
-                            }
+                            binding.youtubeWebview.loadUrl(viewModel.address.value)
                         }
                     }
                 }
