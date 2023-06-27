@@ -17,6 +17,8 @@ import android.os.IBinder
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
+import io.ktor.util.cio.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.domain.LocalRepository
@@ -39,10 +41,8 @@ class AudioCaptureService : Service() {
     lateinit var openAIRepository: OpenAIRepository
 
     private lateinit var mediaProjectionManager: MediaProjectionManager
-    private var mediaProjection: MediaProjection? = null
-
-    private lateinit var audioCaptureThread: Thread
-    private var audioRecord: AudioRecord? = null
+    private lateinit var mediaProjection: MediaProjection
+    private lateinit var audioRecord: AudioRecord
 
     lateinit var audioOutputFile:File
     lateinit var audioCompressedFile:File
@@ -141,8 +141,8 @@ class AudioCaptureService : Service() {
          * These can be changed according to your application's needs
          */
         val audioFormat = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_AAC_LC)
-            .setSampleRate(8000)
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(SAMPLE_RATE)
             .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
             .build()
 
@@ -161,21 +161,37 @@ class AudioCaptureService : Service() {
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+
+            val bufferSize = AudioRecord.getMinBufferSize(
+                SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            val audioData = ByteArray(bufferSize)
+
             audioRecord = AudioRecord.Builder()
                 .setAudioFormat(audioFormat)
-                // For optimal performance, the buffer size
-                // can be optionally specified to store audio samples.
-                // If the value is not specified,
-                // uses a single frame and lets the
-                // native code figure out the minimum buffer size.
-                .setBufferSizeInBytes(BUFFER_SIZE_IN_BYTES)
+                .setBufferSizeInBytes(bufferSize)
                 .setAudioPlaybackCaptureConfig(config)
                 .build()
 
-            audioRecord!!.startRecording()
-            serviceScope.launch {
-                audioOutputFile = createAudioFile(AudioOriginDIR,"m4a")
-                writeAudioToFile(audioOutputFile)
+            audioRecord.startRecording()
+            audioOutputFile = createAudioFile(AudioOriginDIR, "pcm")
+            CoroutineScope(Dispatchers.IO).launch {
+                audioOutputFile.writeChannel().apply {
+                    while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                        val readSize = audioRecord.read(audioData,0,audioData.size)
+//                        audioRecord.read(capturedAudioSamples, 0, NUM_SAMPLES_PER_READ)
+                        writeFully(audioData,0,readSize)
+//                        fileOutputStream.write(
+//                            capturedAudioSamples.toByteArray(),
+//                            0,
+//                            BUFFER_SIZE_IN_BYTES
+//                        )
+                    }
+                    Timber.d("Audio capture finished for ${audioOutputFile.absolutePath}. File size is ${audioOutputFile.length()} bytes.")
+                    close()
+                }
             }
         }
     }
@@ -192,39 +208,14 @@ class AudioCaptureService : Service() {
         return file
     }
 
-    private fun writeAudioToFile(outputFile: File) {
-        val fileOutputStream = FileOutputStream(outputFile)
-        val capturedAudioSamples = ShortArray(NUM_SAMPLES_PER_READ)
-
-        while (!audioCaptureThread.isInterrupted) {
-            audioRecord?.read(capturedAudioSamples, 0, NUM_SAMPLES_PER_READ)
-
-            fileOutputStream.write(
-                capturedAudioSamples.toByteArray(),
-                0,
-                BUFFER_SIZE_IN_BYTES
-            )
-        }
-
-        fileOutputStream.close()
-        Timber.d("Audio capture finished for ${outputFile.absolutePath}. File size is ${outputFile.length()} bytes.")
-    }
-
     private fun stopAudioCapture() {
-        requireNotNull(mediaProjection) { "Tried to stop audio capture, but there was no ongoing capture in place!" }
-
-        audioCaptureThread.interrupt()
-        audioCaptureThread.join()
-
-        audioRecord!!.stop()
-        audioRecord!!.release()
-        audioRecord = null
-
-        mediaProjection!!.stop()
+        audioRecord.stop()
+        audioRecord.release()
+        mediaProjection.stop()
 
         serviceScope.launch {
 //            openAIRepository.compressedAudioFile.emit(compressAudioFile())
-            openAIRepository.compressedAudioFile.emit(audioOutputFile)
+//            openAIRepository.compressedAudioFile.emit(audioOutputFile)
             Timber.d("AudioCaptureService stop self()")
             stopSelf()
         }
@@ -288,17 +279,6 @@ class AudioCaptureService : Service() {
 
         return@withContext audioCompressedFile
     }
-    private fun ShortArray.toByteArray(): ByteArray {
-        // Samples get translated into bytes following little-endianness:
-        // least significant byte first and the most significant byte last
-        val bytes = ByteArray(size * 2)
-        for (i in indices) {
-            bytes[i * 2] = (this[i] and 0x00FF).toByte()
-            bytes[i * 2 + 1] = (this[i].toInt() shr 8).toByte()
-            this[i] = 0
-        }
-        return bytes
-    }
 
     override fun onBind(p0: Intent?): IBinder? = null
 
@@ -306,10 +286,7 @@ class AudioCaptureService : Service() {
         private const val LOG_TAG = "AudioCaptureService"
         private const val SERVICE_ID = 123
         private const val NOTIFICATION_CHANNEL_ID = "AudioCapture channel"
-
-        private const val NUM_SAMPLES_PER_READ = 1024
-        private const val BYTES_PER_SAMPLE = 2 // 2 bytes since we hardcoded the PCM 16-bit format
-        private const val BUFFER_SIZE_IN_BYTES = NUM_SAMPLES_PER_READ * BYTES_PER_SAMPLE
+        private const val SAMPLE_RATE = 16000 // use 44100 instead.
 
         const val ACTION_START = "AudioCaptureService:Start"
         const val ACTION_STOP = "AudioCaptureService:Stop"
