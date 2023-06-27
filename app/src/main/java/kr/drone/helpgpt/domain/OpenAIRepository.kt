@@ -75,10 +75,6 @@ class OpenAIRepository @Inject constructor(
             audio = FileSource(name = file.name, source = file.source()),
             model = ModelId("whisper-1"),
         )
-        val fileBytes = file.readBytes()
-        val base64Encoded = Base64.getEncoder().encodeToString(fileBytes)
-        println("Base64 encoded file data: $base64Encoded")
         return openAI.translation(request)
     }
-
 }

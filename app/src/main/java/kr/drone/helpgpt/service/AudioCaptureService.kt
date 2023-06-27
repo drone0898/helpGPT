@@ -29,6 +29,8 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlin.concurrent.thread
 import kotlin.experimental.and
@@ -129,21 +131,17 @@ class AudioCaptureService : Service() {
 
     private fun startAudioCapture() {
         val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            AudioPlaybackCaptureConfiguration.Builder(mediaProjection!!)
-                .addMatchingUsage(AudioAttributes.USAGE_MEDIA) // TODO provide UI options for inclusion/exclusion
+            AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
+                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                 .build()
         } else {
             TODO("VERSION.SDK_INT < Q")
         }
 
-        /**
-         * Using hardcoded values for the audio format, Mono PCM samples with a sample rate of 8000Hz
-         * These can be changed according to your application's needs
-         */
         val audioFormat = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setEncoding(ENCODING_FORMAT)
             .setSampleRate(SAMPLE_RATE)
-            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+            .setChannelMask(ENCODING_CHANNEL)
             .build()
 
         if (ActivityCompat.checkSelfPermission(
@@ -151,21 +149,15 @@ class AudioCaptureService : Service() {
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+            // TODO: need permission
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
 
             val bufferSize = AudioRecord.getMinBufferSize(
                 SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
+                ENCODING_CHANNEL,
+                ENCODING_FORMAT
             )
             val audioData = ByteArray(bufferSize)
 
@@ -181,13 +173,7 @@ class AudioCaptureService : Service() {
                 audioOutputFile.writeChannel().apply {
                     while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                         val readSize = audioRecord.read(audioData,0,audioData.size)
-//                        audioRecord.read(capturedAudioSamples, 0, NUM_SAMPLES_PER_READ)
                         writeFully(audioData,0,readSize)
-//                        fileOutputStream.write(
-//                            capturedAudioSamples.toByteArray(),
-//                            0,
-//                            BUFFER_SIZE_IN_BYTES
-//                        )
                     }
                     Timber.d("Audio capture finished for ${audioOutputFile.absolutePath}. File size is ${audioOutputFile.length()} bytes.")
                     close()
@@ -208,78 +194,89 @@ class AudioCaptureService : Service() {
         return file
     }
 
+    private suspend fun convertPcmToM4a():File = withContext(Dispatchers.IO) {
+        audioCompressedFile = createAudioFile(AudioCompressDIR,"m4a")
+        val buffer = ByteArray(1024)
+        val mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, 1)
+        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
+        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, CODEC_BIT_RATE)
+
+        val mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+        val mediaMuxer = MediaMuxer(audioCompressedFile.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        var trackIndex = -1
+
+        val audioInputStream = FileInputStream(audioOutputFile)
+        val countDownLatch = CountDownLatch(1)
+        var eof = false
+
+        mediaCodec.setCallback(object: MediaCodec.Callback() {
+            override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
+                if(eof) return
+                val inputBuffer = codec.getInputBuffer(index)
+                inputBuffer?.let {
+                    it.clear()
+                    val bytesRead = audioInputStream.read(buffer)
+                    if (bytesRead <= 0) {
+                        codec.queueInputBuffer(index, 0, 0, System.currentTimeMillis(), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        eof = true
+                        countDownLatch.countDown()
+                    } else {
+                        it.put(buffer, 0, bytesRead)
+                        codec.queueInputBuffer(index, 0, bytesRead, System.currentTimeMillis(), 0)
+                    }
+                }
+            }
+
+            override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
+                if(eof) return
+                val outputBuffer = codec.getOutputBuffer(index)
+                outputBuffer?.let {
+                    mediaMuxer.writeSampleData(trackIndex, it, info)
+                }
+                codec.releaseOutputBuffer(index, false)
+            }
+
+            override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
+                countDownLatch.countDown()
+            }
+
+            override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
+                trackIndex = mediaMuxer.addTrack(format)
+                mediaMuxer.start()
+            }
+        })
+
+        mediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        mediaCodec.start()
+
+        try {
+            countDownLatch.await()
+        } catch (e: Exception) {
+            Timber.e(e, "Error processing audio data")
+        } finally {
+            audioInputStream.close()
+            mediaCodec.stop()
+            mediaCodec.release()
+            mediaMuxer.stop()
+            mediaMuxer.release()
+        }
+
+        return@withContext audioCompressedFile
+    }
+
+
+
     private fun stopAudioCapture() {
         audioRecord.stop()
         audioRecord.release()
         mediaProjection.stop()
 
         serviceScope.launch {
-//            openAIRepository.compressedAudioFile.emit(compressAudioFile())
-//            openAIRepository.compressedAudioFile.emit(audioOutputFile)
+            openAIRepository.compressedAudioFile.emit(convertPcmToM4a())
             Timber.d("AudioCaptureService stop self()")
             stopSelf()
         }
     }
-
-    private suspend fun compressAudioFile(): File = withContext(Dispatchers.IO) {
-
-        val mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, 44100, 2)
-        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, 128000)
-
-        val mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-
-        mediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-
-        val fileChannel = FileInputStream(audioOutputFile).channel
-        audioCompressedFile = createAudioFile(AudioCompressDIR, "m4a")
-        val outputStream = FileOutputStream(audioCompressedFile)
-
-        mediaCodec.setCallback(object : MediaCodec.Callback() {
-
-            override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-                val buffer = codec.getInputBuffer(index)
-                val bytesRead = fileChannel.read(buffer)
-                if (bytesRead < 0) {
-                    codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                } else {
-                    codec.queueInputBuffer(index, 0, bytesRead, System.nanoTime(), 0)
-                }
-            }
-
-            override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-                Timber.e("MediaCodec onError: ", e)
-                cleanup()
-            }
-
-            override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
-                Timber.d("MediaCodec onOutputFormatChanged")
-            }
-
-            override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-                val outBuffer = ByteArray(info.size)
-                val outputBuffer = codec.getOutputBuffer(index)
-                outputBuffer?.get(outBuffer)
-                outputStream.write(outBuffer)
-                codec.releaseOutputBuffer(index, false)
-                if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    cleanup()
-                }
-            }
-
-            fun cleanup() {
-                mediaCodec.stop()
-                mediaCodec.release()
-                fileChannel.close()
-                outputStream.close()
-            }
-        })
-
-        mediaCodec.start()
-
-        return@withContext audioCompressedFile
-    }
-
     override fun onBind(p0: Intent?): IBinder? = null
 
     companion object {
@@ -287,6 +284,11 @@ class AudioCaptureService : Service() {
         private const val SERVICE_ID = 123
         private const val NOTIFICATION_CHANNEL_ID = "AudioCapture channel"
         private const val SAMPLE_RATE = 16000 // use 44100 instead.
+        private const val CODEC_BIT_RATE = 64000
+
+        private const val ENCODING_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        private const val ENCODING_CHANNEL = AudioFormat.CHANNEL_IN_MONO
+
 
         const val ACTION_START = "AudioCaptureService:Start"
         const val ACTION_STOP = "AudioCaptureService:Stop"

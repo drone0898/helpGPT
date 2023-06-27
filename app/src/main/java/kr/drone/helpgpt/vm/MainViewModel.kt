@@ -3,6 +3,7 @@ package kr.drone.helpgpt.vm
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aallam.openai.api.BetaOpenAI
+import com.aallam.openai.api.audio.Translation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,17 +41,15 @@ class MainViewModel @Inject constructor(
     val videoId:StateFlow<String> get() = _videoId
     val script:MutableStateFlow<String> = MutableStateFlow("")
 
-    val translatedText: MutableStateFlow<String?> = MutableStateFlow(null)
-
+    lateinit var translation: Translation
     init {
         viewModelScope.launch {
             openAIRepository.compressedAudioFile.filterNotNull().collect {
-                translatedText.value = openAIRepository.transcriptionRequest(it).text
+                translation = openAIRepository.transcriptionRequest(it)
+                translateResultText.value = translation.text
             }
         }
     }
-
-
 
     fun extractVideoIdFromUrl(url:String) {
 //        stopCrawling()
