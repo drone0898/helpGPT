@@ -15,18 +15,14 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.databinding.library.baseAdapters.BR
-import com.google.android.youtube.player.YouTubeInitializationResult
-import com.google.android.youtube.player.YouTubePlayer
 import com.gun0912.tedpermission.PermissionListener
 import com.gun0912.tedpermission.normal.TedPermission
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
-import kr.co.prnd.YouTubePlayerView
 import kr.drone.helpgpt.BuildConfig
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.ActivityMainBinding
 import kr.drone.helpgpt.service.AudioCaptureService
-import kr.drone.helpgpt.service.TranslateScriptService
 import kr.drone.helpgpt.ui.view.MyWebViewClient
 import kr.drone.helpgpt.vm.MainViewModel
 
@@ -70,22 +66,14 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
     private val translationWithOverlayLauncher: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
             if(it.resultCode == Activity.RESULT_OK){
-                val scriptServiceIntent = Intent(this,
-                    TranslateScriptService::class.java).apply {
-                    action = TranslateScriptService.ACTION_START
-                    if(it.data!=null){
-                        putExtra(TranslateScriptService.EXTRA_RESULT_DATA, it.data)
-                    }
-                }
                 val audioCaptureIntent = Intent(this,
                     AudioCaptureService::class.java).apply {
-                    action = AudioCaptureService.ACTION_START
+                    action = AudioCaptureService.ACTION_START_WITH_OVERLAY
                     if(it.data!=null){
                         putExtra(AudioCaptureService.EXTRA_RESULT_DATA, it.data)
                     }
                 }
                 startForegroundService(audioCaptureIntent)
-                startForegroundService(scriptServiceIntent)
             }
         }
 
@@ -149,6 +137,25 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
         }
     }
 
+    override fun initEvent() {
+        repeatsOnStarted (
+            listOf(
+                {
+                    viewModel.address.collect {
+                        viewModel.extractVideoIdFromUrl(it)
+                    }
+                },
+                {
+                    viewModel.videoId.collectLatest {
+                        if (it != "") {
+                            binding.youtubeWebview.loadUrl(viewModel.address.value)
+                        }
+                    }
+                }
+            )
+        )
+    }
+
     private fun startCaptureIntent(launcher:ActivityResultLauncher<Intent>) {
         val mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -171,23 +178,5 @@ class MainActivity: BaseActivity<ActivityMainBinding>() {
                 }
             })
             .setPermissions(*permissions.toTypedArray()).check()
-    }
-    override fun initEvent() {
-        repeatsOnStarted (
-            listOf(
-                {
-                    viewModel.address.collect {
-                        viewModel.extractVideoIdFromUrl(it)
-                    }
-                },
-                {
-                    viewModel.videoId.collectLatest {
-                        if (it != "") {
-                            binding.youtubeWebview.loadUrl(viewModel.address.value)
-                        }
-                    }
-                }
-            )
-        )
     }
 }

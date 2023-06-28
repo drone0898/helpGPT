@@ -14,5 +14,7 @@
     <string name="translation_permission_btn_text">번역 화면을 위한 권한이 필요합니다.</string>
 
     <string name="recordForTranslate">번역을 위해 녹음 중 입니다.</string>
-    <string name="stopRecord">녹음 정지</string>
+    <string name="stopRecord">중지</string>
+    <string name="pauseRecord">녹음 정지</string>
+    <string name="resumeRecord">녹음 재개</string>
 </resources>

@@ -10,6 +10,7 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.AndroidEntryPoint
@@ -40,55 +41,86 @@ class AudioCaptureService : Service() {
     private lateinit var audioOutputFile:File
     private lateinit var audioCompressedFile:File
 
+    private lateinit var mParams: WindowManager.LayoutParams
+    private lateinit var mWindowManager: WindowManager
+    private var isRecording = true
+
     private val job = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + job)
 
     override fun onCreate() {
         super.onCreate()
-        val stopAction = Intent(
-            this, AudioCaptureService::class.java).apply { action = ACTION_STOP }
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_CANCEL_CURRENT
-        }
-        val closePending:PendingIntent = PendingIntent.getService(this,0,
-            stopAction, flags)
-
         val notiBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.round_fiber_manual_record_24)
             .setContentTitle(getString(R.string.recordForTranslate))
-            .addAction(R.drawable.round_stop_24,getString(R.string.stopRecord),closePending)
-        createNotificationChannel()
-
+        val serviceChannel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            NOTIFICATION_CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        val manager = getSystemService(NotificationManager::class.java) as NotificationManager
+        manager.createNotificationChannel(serviceChannel)
         startForeground(
-            SERVICE_ID,
+            NOTIFICATION_ID,
             notiBuilder.build()
         )
+
+        updateNotification(isRecording)
 
         // use applicationContext to avoid memory leak on Android 10.
         // see: https://partnerissuetracker.corp.google.com/issues/139732252
         mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
     }
+
+    private fun updateNotification(isRecording: Boolean) {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_CANCEL_CURRENT
+        }
+        val pauseIntent = Intent(this, AudioCaptureService::class.java).apply {
+            action = ACTION_PAUSE_RECORD
+        }
+        val pausePendingIntent: PendingIntent = PendingIntent.getService(this, 0, pauseIntent, flags)
+
+        val resumeIntent = Intent(this, AudioCaptureService::class.java).apply {
+            action = ACTION_RESUME_RECORD
+        }
+        val resumePendingIntent: PendingIntent = PendingIntent.getService(this, 0, resumeIntent, flags)
+
+        // 중지 액션 PendingIntent
+        val stopIntent = Intent(this, AudioCaptureService::class.java).apply {
+            action = ACTION_STOP
+        }
+        val stopPendingIntent: PendingIntent = PendingIntent.getService(this, 0, stopIntent, 0)
+
+        val notiBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(if(isRecording){R.drawable.round_fiber_manual_record_24}else{R.drawable.round_pause_circle_outline_24})
+            .setContentTitle(getString(R.string.recordForTranslate))
+
+        // 녹음 상태에 따라 알림의 액션을 결정
+        if (isRecording) {
+            notiBuilder.addAction(R.drawable.round_pause_24, getString(R.string.pauseRecord), pausePendingIntent)
+            notiBuilder.addAction(R.drawable.round_stop_24, getString(R.string.stopRecord), stopPendingIntent)
+        } else {
+            notiBuilder.addAction(R.drawable.round_fiber_manual_record_24, getString(R.string.resumeRecord), resumePendingIntent)
+            notiBuilder.addAction(R.drawable.round_stop_24, getString(R.string.stopRecord), stopPendingIntent)
+        }
+
+        // 알림 업데이트
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notiBuilder.build())
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         job.cancel()
     }
-    private fun createNotificationChannel() {
-        val serviceChannel = NotificationChannel(
-            NOTIFICATION_CHANNEL_ID,
-            "Audio Capture Service Channel",
-            NotificationManager.IMPORTANCE_DEFAULT
-        )
-
-        val manager = getSystemService(NotificationManager::class.java) as NotificationManager
-        manager.createNotificationChannel(serviceChannel)
-    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return if (intent != null) {
-            when (intent.action) {
+        if (intent != null) {
+             when (intent.action) {
                 ACTION_START -> {
                     val extra =
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -105,18 +137,48 @@ class AudioCaptureService : Service() {
                             ) as MediaProjection
                         startAudioCapture()
                     }
-                    START_STICKY
+                }
+                ACTION_START_WITH_OVERLAY -> {
+                    val extra =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(EXTRA_RESULT_DATA)
+                        }
+                    if(extra!=null){
+                        mediaProjection =
+                            mediaProjectionManager.getMediaProjection(
+                                Activity.RESULT_OK,
+                                extra
+                            ) as MediaProjection
+                        startAudioCapture()
+                    }
+                }
+                ACTION_RESUME_RECORD-> {
+                    resumeRecording()
+                }
+                ACTION_PAUSE_RECORD-> {
+                    pauseRecording()
                 }
                 ACTION_STOP -> {
                     stopAudioCapture()
-                    START_NOT_STICKY
                 }
                 else -> throw IllegalArgumentException("Unexpected action received: ${intent.action}")
             }
-        } else {
-            START_NOT_STICKY
         }
+        return START_STICKY
     }
+    private fun pauseRecording(){
+        audioRecord.stop()
+        audioRecord.release()
+        mediaProjection.stop()
+    }
+
+    private fun resumeRecording(){
+
+    }
+
     private fun startAudioCapture() {
         val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
@@ -263,8 +325,9 @@ class AudioCaptureService : Service() {
     override fun onBind(p0: Intent?): IBinder? = null
 
     companion object {
-        private const val SERVICE_ID = 123
-        private const val NOTIFICATION_CHANNEL_ID = "AudioCapture channel"
+        private const val NOTIFICATION_ID = 123
+        private const val NOTIFICATION_CHANNEL_ID = "Translation channel"
+        private const val NOTIFICATION_CHANNEL_NAME = "Audio Capture Service Channel"
         private const val SAMPLE_RATE = 16000 // or 44100 (maybe error occur)
         private const val CODEC_BIT_RATE = 64000
 
@@ -274,6 +337,9 @@ class AudioCaptureService : Service() {
 
         const val ACTION_START = "AudioCaptureService:Start"
         const val ACTION_STOP = "AudioCaptureService:Stop"
+        const val ACTION_RESUME_RECORD = "AudioCaptureService:ResumeRecord"
+        const val ACTION_PAUSE_RECORD = "AudioCaptureService:PauseRecord"
+        const val ACTION_START_WITH_OVERLAY = "AudioCaptureService:StartWithOverlay"
         const val EXTRA_RESULT_DATA = "AudioCaptureService:Extra:ResultData"
         const val AudioOriginDIR = "/AudioCaptures"
         const val AudioCompressDIR = "/AudioCompress"
