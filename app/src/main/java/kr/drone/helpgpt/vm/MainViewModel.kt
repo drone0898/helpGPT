@@ -50,7 +50,6 @@ class MainViewModel @Inject constructor(
             }
         }
     }
-
     fun extractVideoIdFromUrl(url:String) {
 //        stopCrawling()
         val videoIdPattern = "^(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)([\\w-]+)"
@@ -90,6 +89,13 @@ class MainViewModel @Inject constructor(
     private fun hideBtn(){
         translateBtnVisibility.value = VIEW_GONE
         summaryBtnVisibility.value = VIEW_GONE
+    }
+
+    fun showBtn(){
+        summaryVisibility.value = VIEW_GONE
+        translateVisibility.value = VIEW_GONE
+        translateBtnVisibility.value = VIEW_VISIBLE
+        summaryBtnVisibility.value = VIEW_VISIBLE
     }
 }
 

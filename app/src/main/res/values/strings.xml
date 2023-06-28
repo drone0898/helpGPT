@@ -8,7 +8,10 @@
     <string name="write_youtube_address_or_videoid">Write Youtube address or VideoId</string>
     <string name="summary_start">Summary Start!</string>
     <string name="translate">Translate</string>
+    <string name="translate_service">Translate Service</string>
     <string name="translate_result">번역 결과</string>
+
+    <string name="translation_permission_btn_text">번역 화면을 위한 권한이 필요합니다.</string>
 
     <string name="recordForTranslate">번역을 위해 녹음 중 입니다.</string>
     <string name="stopRecord">녹음 정지</string>

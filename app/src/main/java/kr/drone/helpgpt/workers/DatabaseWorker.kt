@@ -13,7 +13,6 @@ class DatabaseWorker(
     }
 
     companion object {
-        private const val TAG = "GptDatabaseWorker"
         const val KEY_FILENAME = "GPT_DATA_FILENAME"
     }
 }

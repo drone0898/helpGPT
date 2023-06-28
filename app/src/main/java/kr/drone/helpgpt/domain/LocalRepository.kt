@@ -1,6 +1,5 @@
 package kr.drone.helpgpt.domain
 
-import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kr.drone.helpgpt.data.local.LocalDataSource
 import kr.drone.helpgpt.data.model.Summary

@@ -73,6 +73,17 @@ xmlns:tools="http://schemas.android.com/tools">
                 app:layout_constraintTop_toBottomOf="@id/summary_btn"
                 android:layout_marginTop="16dp"/>
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/translate_service_btn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/translate_service"
+                android:visibility="@{viewModel.translateBtnVisibility}"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/translate_btn"
+                android:layout_marginTop="16dp"/>
+
             <androidx.appcompat.widget.AppCompatTextView
                 android:id="@+id/translate_text_label"
                 android:layout_width="wrap_content"

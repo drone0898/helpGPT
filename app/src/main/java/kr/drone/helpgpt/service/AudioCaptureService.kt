@@ -1,11 +1,7 @@
 package kr.drone.helpgpt.service
 
 import android.Manifest
-import android.app.Activity
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,19 +17,14 @@ import io.ktor.util.cio.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kr.drone.helpgpt.R
-import kr.drone.helpgpt.domain.LocalRepository
 import kr.drone.helpgpt.domain.OpenAIRepository
 import timber.log.Timber
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
-import kotlin.concurrent.thread
-import kotlin.experimental.and
 
 @AndroidEntryPoint
 //https://github.com/julioz/AudioCaptureSample
@@ -46,8 +37,8 @@ class AudioCaptureService : Service() {
     private lateinit var mediaProjection: MediaProjection
     private lateinit var audioRecord: AudioRecord
 
-    lateinit var audioOutputFile:File
-    lateinit var audioCompressedFile:File
+    private lateinit var audioOutputFile:File
+    private lateinit var audioCompressedFile:File
 
     private val job = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + job)
@@ -80,13 +71,10 @@ class AudioCaptureService : Service() {
         mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
     }
-
     override fun onDestroy() {
         super.onDestroy()
         job.cancel()
     }
-
-
     private fun createNotificationChannel() {
         val serviceChannel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
@@ -106,6 +94,7 @@ class AudioCaptureService : Service() {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
                         } else {
+                            @Suppress("DEPRECATION")
                             intent.getParcelableExtra(EXTRA_RESULT_DATA)
                         }
                     if(extra!=null){
@@ -128,7 +117,6 @@ class AudioCaptureService : Service() {
             START_NOT_STICKY
         }
     }
-
     private fun startAudioCapture() {
         val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
@@ -181,7 +169,6 @@ class AudioCaptureService : Service() {
             }
         }
     }
-
     private fun createAudioFile(dir:String, filenameExt:String): File {
         val audioCapturesDirectory = File(cacheDir, dir)
         if (!audioCapturesDirectory.exists()) {
@@ -193,7 +180,6 @@ class AudioCaptureService : Service() {
         Timber.d("Created File : ${file.absolutePath}/$fileName")
         return file
     }
-
     private suspend fun convertPcmToM4a():File = withContext(Dispatchers.IO) {
         audioCompressedFile = createAudioFile(AudioCompressDIR,"m4a")
         val buffer = ByteArray(1024)
@@ -263,9 +249,6 @@ class AudioCaptureService : Service() {
 
         return@withContext audioCompressedFile
     }
-
-
-
     private fun stopAudioCapture() {
         audioRecord.stop()
         audioRecord.release()
@@ -280,10 +263,9 @@ class AudioCaptureService : Service() {
     override fun onBind(p0: Intent?): IBinder? = null
 
     companion object {
-        private const val LOG_TAG = "AudioCaptureService"
         private const val SERVICE_ID = 123
         private const val NOTIFICATION_CHANNEL_ID = "AudioCapture channel"
-        private const val SAMPLE_RATE = 16000 // use 44100 instead.
+        private const val SAMPLE_RATE = 16000 // or 44100 (maybe error occur)
         private const val CODEC_BIT_RATE = 64000
 
         private const val ENCODING_FORMAT = AudioFormat.ENCODING_PCM_16BIT

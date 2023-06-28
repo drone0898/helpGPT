@@ -4,6 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/> <!-- 화면위에 그리기 (Under Oreo)-->
+    <uses-permission android:name="android.permission.ACTION_MANAGE_OVERLAY_PERMISSION" /> <!-- 화면위에 그리기 (over Oreo)-->
     <application
         android:name=".core.BaseApplication"
         android:allowBackup="true"
@@ -23,9 +26,12 @@
         <activity android:name=".ui.activity.MainActivity"/>
         <activity android:name=".ui.activity.SummaryProcActivity"/>
         <activity android:name=".ui.activity.TranslateActivity"/>
+
         <service android:name=".service.AudioCaptureService"
             android:enabled="true"
             android:foregroundServiceType="mediaProjection"/>
+
+
     </application>
 
 

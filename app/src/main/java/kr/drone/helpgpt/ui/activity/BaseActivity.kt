@@ -38,12 +38,6 @@ abstract class BaseActivity <V: ViewDataBinding> : AppCompatActivity() {
     protected abstract fun initBinding() // 데이터 바인딩
     protected abstract fun initEvent() // 이벤트 바인딩
 
-//    private fun lazyInitViewModel() {
-//        binding.setVariable(BR.viewModel, vm)
-//        lifecycle.addObserver(vm)
-//        return vm
-//    }
-
     fun LifecycleOwner.repeatOnStarted(block: suspend CoroutineScope.() -> Unit) {
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED,block)
