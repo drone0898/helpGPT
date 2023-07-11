@@ -25,7 +25,6 @@ class OpenAIRepository @Inject constructor(
     private val apiKeyProvider: ApiKeyProvider
 ) {
     private var openAI: OpenAI = createOpenAI()
-    val compressedAudioFile: MutableSharedFlow<File?> = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
     private fun createOpenAI():OpenAI{
         return OpenAI(
             token = apiKeyProvider.apiKey,

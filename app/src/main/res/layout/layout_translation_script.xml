@@ -4,11 +4,26 @@ xmlns:app="http://schemas.android.com/apk/res-auto"
 xmlns:tools="http://schemas.android.com/tools">
 
     <data>
+        <variable
+            name="service"
+            type="kr.drone.helpgpt.service.AudioCaptureService" />
     </data>
 
         <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent" android:layout_height="match_parent">
+            android:background="@color/fade"
+            android:layout_width="match_parent" android:layout_height="wrap_content">
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@{service.translateResultText}"
+                android:textAlignment="center"
+                android:backgroundTint="@color/transparent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                android:maxLines="3"
+                tools:text="번역된 자막이 표시되는 텍스트 뷰.\n2번째줄의 자막은 이렇게 표시돼야한다.\n최대 3줄까지" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
 </layout>

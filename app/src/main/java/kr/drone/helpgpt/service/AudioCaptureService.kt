@@ -1,23 +1,42 @@
 package kr.drone.helpgpt.service
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.PixelFormat
 import android.media.*
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
-import android.os.IBinder
+import android.provider.Settings
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.LifecycleService
+import com.aallam.openai.api.BetaOpenAI
+import com.konovalov.vad.webrtc.Vad
+import com.konovalov.vad.webrtc.VadListener
+import com.konovalov.vad.webrtc.VadWebRTC
+import com.konovalov.vad.webrtc.config.FrameSize
+import com.konovalov.vad.webrtc.config.SampleRate
 import dagger.hilt.android.AndroidEntryPoint
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kr.drone.helpgpt.R
+import kr.drone.helpgpt.databinding.LayoutTranslationScriptBinding
 import kr.drone.helpgpt.domain.OpenAIRepository
 import timber.log.Timber
 import java.io.File
@@ -29,7 +48,7 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 //https://github.com/julioz/AudioCaptureSample
-class AudioCaptureService : Service() {
+class AudioCaptureService : LifecycleService() {
 
     @Inject
     lateinit var openAIRepository: OpenAIRepository
@@ -40,13 +59,50 @@ class AudioCaptureService : Service() {
 
     private lateinit var audioOutputFile:File
     private lateinit var audioCompressedFile:File
+    private lateinit var vad: VadWebRTC
+
+    private val compressedAudioFile: MutableSharedFlow<File?> = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
+    private val _translateResultText: MutableStateFlow<String> = MutableStateFlow("")
+    val translateResultText: StateFlow<String> = _translateResultText
 
     private lateinit var mParams: WindowManager.LayoutParams
     private lateinit var mWindowManager: WindowManager
+    private lateinit var inflater: LayoutInflater
+    private lateinit var binding:LayoutTranslationScriptBinding
+    private lateinit var startXY:Pair<Float,Float>
+    private lateinit var prevXY:Pair<Int,Int>
+    @SuppressLint("ClickableViewAccessibility")
+    private val dragListener: View.OnTouchListener = View.OnTouchListener { _, event ->
+        when (event?.action) {
+            MotionEvent.ACTION_DOWN -> {
+                startXY = Pair(event.rawX,event.rawY)
+                prevXY = Pair(mParams.x,mParams.y)
+                mParams.alpha = 0.5f
+                mWindowManager.updateViewLayout(binding.root, mParams) //뷰 업데이트
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                //터치해서 이동한 만큼 이동 시킨다
+                mParams.x = prevXY.first + (event.rawX - startXY.first).toInt()
+                mParams.y = prevXY.second + (event.rawY - startXY.second).toInt()
+                mWindowManager.updateViewLayout(binding.root, mParams) //뷰 업데이트
+            }
+
+            MotionEvent.ACTION_UP -> {
+                mParams.alpha = 1f
+                mWindowManager.updateViewLayout(
+                    binding.root,
+                    mParams
+                )
+            }
+        }
+        true
+    }
     private var isRecording = true
 
-    private val job = SupervisorJob()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + job)
+    private val serviceScopeIO = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private lateinit var audioRecordJob:Job
 
     override fun onCreate() {
         super.onCreate()
@@ -71,6 +127,60 @@ class AudioCaptureService : Service() {
         // see: https://partnerissuetracker.corp.google.com/issues/139732252
         mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
+//        vad = Vad.builder()
+//            .setSampleRate(SampleRate.SAMPLE_RATE_16K)
+//            .setFrameSize(FrameSize.FRAME_SIZE_320)
+//            .setSilenceDurationMs(300)
+//            .setSpeechDurationMs(50)
+//            .build()
+
+        createView()
+        collect()
+    }
+
+    private fun createView() {
+        inflater = LayoutInflater.from(this)
+        mWindowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        binding = DataBindingUtil.inflate(inflater, R.layout.layout_translation_script, null,
+            false)
+        binding.lifecycleOwner = this
+        binding.service = this
+
+        mParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,  //항상 최 상위에 있게. status bar 밑에 있음. 터치 이벤트 받을 수 있음.
+            (WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+                    or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS),  //이 속성을 안주면 터치 & 키 이벤트도 먹게 된다. //포커스를 안줘서 자기 영역 밖터치는 인식 안하고 키이벤트를 사용하지 않게 설정
+            PixelFormat.TRANSLUCENT
+        )
+        mParams.gravity =
+            Gravity.CENTER_HORIZONTAL or Gravity.CENTER_VERTICAL //왼쪽 상단에 위치하게 함.
+
+        mParams.alpha = 1f
+
+        binding.root.setOnTouchListener(dragListener)
+
+        //TODO : remember previous ui position
+//        val pos: CoordinateValue = LocalDataManager.getInstance().getData(CoordinateValue::class.java)
+//        if (pos != null) {
+//            mParams.x = pos.x
+//            mParams.y = pos.y
+//        }
+        if (Settings.canDrawOverlays(this@AudioCaptureService)) {
+            mWindowManager.addView(binding.root, mParams)
+        }
+    }
+
+    @OptIn(BetaOpenAI::class)
+    private fun collect() {
+        serviceScopeIO.launch {
+            compressedAudioFile.filterNotNull().collect {
+                _translateResultText.value = openAIRepository.transcriptionRequest(it).text
+            }
+        }
     }
 
     private fun updateNotification(isRecording: Boolean) {
@@ -93,7 +203,12 @@ class AudioCaptureService : Service() {
         val stopIntent = Intent(this, AudioCaptureService::class.java).apply {
             action = ACTION_STOP
         }
-        val stopPendingIntent: PendingIntent = PendingIntent.getService(this, 0, stopIntent, 0)
+        val stopPendingIntent: PendingIntent = PendingIntent.getService(
+            this,
+            0,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
 
         val notiBuilder = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(if(isRecording){R.drawable.round_fiber_manual_record_24}else{R.drawable.round_pause_circle_outline_24})
@@ -114,11 +229,15 @@ class AudioCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        mWindowManager.removeView(binding.root)
+        serviceScopeIO.cancel()
+        serviceScope.cancel()
+        audioRecordJob.cancel()
         super.onDestroy()
-        job.cancel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         if (intent != null) {
              when (intent.action) {
                 ACTION_START -> {
@@ -169,13 +288,17 @@ class AudioCaptureService : Service() {
         }
         return START_STICKY
     }
-    private fun pauseRecording(){
+    private fun pauseRecording() {
         audioRecord.stop()
         audioRecord.release()
         mediaProjection.stop()
+        serviceScope.launch {
+            compressedAudioFile.emit(convertPcmToM4a())
+            Timber.d("AudioCaptureService stop self()")
+        }
     }
 
-    private fun resumeRecording(){
+    private fun resumeRecording() {
 
     }
 
@@ -219,7 +342,20 @@ class AudioCaptureService : Service() {
 
             audioRecord.startRecording()
             audioOutputFile = createAudioFile(AudioOriginDIR, "pcm")
-            CoroutineScope(Dispatchers.IO).launch {
+
+//            vad.setContinuousSpeechListener(audioData.asList().chunked(2).map
+//            { (l, h) -> (l.toInt() + h.toInt().shl(8)).toShort() }.toShortArray(),
+//                object : VadListener{
+//                override fun onNoiseDetected() {
+//                    Timber.d("VAD Noise Detected")
+//                }
+//
+//                override fun onSpeechDetected() {
+//                    Timber.d("VAD Speech Detected")
+//                }
+//            })
+
+            audioRecordJob = CoroutineScope(Dispatchers.IO).launch {
                 audioOutputFile.writeChannel().apply {
                     while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                         val readSize = audioRecord.read(audioData,0,audioData.size)
@@ -315,14 +451,9 @@ class AudioCaptureService : Service() {
         audioRecord.stop()
         audioRecord.release()
         mediaProjection.stop()
-
-        serviceScope.launch {
-            openAIRepository.compressedAudioFile.emit(convertPcmToM4a())
-            Timber.d("AudioCaptureService stop self()")
-            stopSelf()
-        }
+        audioRecordJob.cancel()
+        stopSelf()
     }
-    override fun onBind(p0: Intent?): IBinder? = null
 
     companion object {
         private const val NOTIFICATION_ID = 123

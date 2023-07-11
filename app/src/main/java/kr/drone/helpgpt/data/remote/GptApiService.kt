@@ -1,16 +1,13 @@
 package kr.drone.helpgpt.data.remote
 
+import kr.drone.helpgpt.data.model.LectureList
 import retrofit2.http.GET
 import retrofit2.http.Query
 
 interface GptApiService {
-    @GET("posts")
-    suspend fun getAllPosts(
-        @Query("userId") userId: Int,
-    ): List<Int>
-
-    @GET("photos")
-    suspend fun getAllPhotos(
-        @Query("albumId") albumId: Int,
-    ): List<Int>
+    @GET("courseList")
+    suspend fun getList(
+        @Query("serviceKey") serviceKey: String,
+        @Query("Mobile") mobile:Int = 1
+    ): LectureList
 }

@@ -50,6 +50,9 @@ android {
 
 dependencies {
 
+    implementation fileTree(dir: 'libs', include: ['*.aar'])
+    // android-vad:webrtc:2.0.3
+
     implementation 'androidx.core:core-ktx:1.10.1'
 
     // activity / fragments
@@ -107,6 +110,9 @@ dependencies {
 
     // open ai
     implementation "com.aallam.openai:openai-client:3.2.5"
+
+    //Failed to resolve: com.github.gkonovalov.android-vad:webrtc:2.0.3, -> use .aar lib
+//    implementation 'com.github.gkonovalov.android-vad:webrtc:2.0.3'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

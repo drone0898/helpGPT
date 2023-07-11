@@ -34,22 +34,12 @@ class MainViewModel @Inject constructor(
     val summaryVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_GONE)
     val translateBtnVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_VISIBLE)
     val translateVisibility: MutableStateFlow<Int> = MutableStateFlow(VIEW_GONE)
-    val translateResultText: MutableStateFlow<String> = MutableStateFlow("")
+    val translateResultText: MutableStateFlow<String> = MutableStateFlow("script on service.")
 
     val event: StateFlow<String> = _event
     val address:StateFlow<String> get() = _address
     val videoId:StateFlow<String> get() = _videoId
-    val script:MutableStateFlow<String> = MutableStateFlow("")
 
-    lateinit var translation: Translation
-    init {
-        viewModelScope.launch {
-            openAIRepository.compressedAudioFile.filterNotNull().collect {
-                translation = openAIRepository.transcriptionRequest(it)
-                translateResultText.value = translation.text
-            }
-        }
-    }
     fun extractVideoIdFromUrl(url:String) {
 //        stopCrawling()
         val videoIdPattern = "^(?:https?://)?(?:www\\.)?(?:youtube\\.com/watch\\?v=|youtu\\.be/)([\\w-]+)"
