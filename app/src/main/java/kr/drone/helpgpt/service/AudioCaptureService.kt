@@ -21,12 +21,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.lifecycleScope
 import com.aallam.openai.api.BetaOpenAI
-import com.konovalov.vad.webrtc.Vad
-import com.konovalov.vad.webrtc.VadListener
-import com.konovalov.vad.webrtc.VadWebRTC
-import com.konovalov.vad.webrtc.config.FrameSize
-import com.konovalov.vad.webrtc.config.SampleRate
 import dagger.hilt.android.AndroidEntryPoint
 import io.ktor.util.cio.*
 import io.ktor.utils.io.*
@@ -34,32 +30,26 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filterNotNull
 import kr.drone.helpgpt.R
 import kr.drone.helpgpt.databinding.LayoutTranslationScriptBinding
+import kr.drone.helpgpt.domain.AudioCaptureRepository
 import kr.drone.helpgpt.domain.OpenAIRepository
 import timber.log.Timber
 import java.io.File
-import java.io.FileInputStream
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.CountDownLatch
 import javax.inject.Inject
 
 @AndroidEntryPoint
-//https://github.com/julioz/AudioCaptureSample
 class AudioCaptureService : LifecycleService() {
 
     @Inject
     lateinit var openAIRepository: OpenAIRepository
+    lateinit var audioCaptureRepository: AudioCaptureRepository
+    private lateinit var mediaProjectionManager:MediaProjectionManager
 
-    private lateinit var mediaProjectionManager: MediaProjectionManager
-    private lateinit var mediaProjection: MediaProjection
-    private lateinit var audioRecord: AudioRecord
-
-    private lateinit var audioOutputFile:File
-    private lateinit var audioCompressedFile:File
-    private lateinit var vad: VadWebRTC
 
     private val compressedAudioFile: MutableSharedFlow<File?> = MutableSharedFlow(replay = 1, extraBufferCapacity = 1)
     private val _translateResultText: MutableStateFlow<String> = MutableStateFlow("")
@@ -71,6 +61,12 @@ class AudioCaptureService : LifecycleService() {
     private lateinit var binding:LayoutTranslationScriptBinding
     private lateinit var startXY:Pair<Float,Float>
     private lateinit var prevXY:Pair<Int,Int>
+
+    private var isRecording = false
+
+    private val serviceScopeIO = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     @SuppressLint("ClickableViewAccessibility")
     private val dragListener: View.OnTouchListener = View.OnTouchListener { _, event ->
         when (event?.action) {
@@ -98,11 +94,7 @@ class AudioCaptureService : LifecycleService() {
         }
         true
     }
-    private var isRecording = true
 
-    private val serviceScopeIO = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private lateinit var audioRecordJob:Job
 
     override fun onCreate() {
         super.onCreate()
@@ -121,19 +113,12 @@ class AudioCaptureService : LifecycleService() {
             notiBuilder.build()
         )
 
-        updateNotification(isRecording)
+        updateNotification(true)
 
         // use applicationContext to avoid memory leak on Android 10.
         // see: https://partnerissuetracker.corp.google.com/issues/139732252
         mediaProjectionManager =
             applicationContext.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-
-//        vad = Vad.builder()
-//            .setSampleRate(SampleRate.SAMPLE_RATE_16K)
-//            .setFrameSize(FrameSize.FRAME_SIZE_320)
-//            .setSilenceDurationMs(300)
-//            .setSpeechDurationMs(50)
-//            .build()
 
         createView()
         collect()
@@ -184,6 +169,7 @@ class AudioCaptureService : LifecycleService() {
     }
 
     private fun updateNotification(isRecording: Boolean) {
+        this.isRecording = isRecording
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
@@ -232,7 +218,7 @@ class AudioCaptureService : LifecycleService() {
         mWindowManager.removeView(binding.root)
         serviceScopeIO.cancel()
         serviceScope.cancel()
-        audioRecordJob.cancel()
+        audioCaptureRepository.closeRepository()
         super.onDestroy()
     }
 
@@ -248,13 +234,21 @@ class AudioCaptureService : LifecycleService() {
                             @Suppress("DEPRECATION")
                             intent.getParcelableExtra(EXTRA_RESULT_DATA)
                         }
-                    if(extra!=null){
-                        mediaProjection =
+                    if(extra!=null) {
+                        val mediaProjection =
                             mediaProjectionManager.getMediaProjection(
                                 Activity.RESULT_OK,
                                 extra
                             ) as MediaProjection
-                        startAudioCapture()
+                        if (ActivityCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.RECORD_AUDIO
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            // TODO: need permission
+                        }else{
+                            startRecording(mediaProjection)
+                        }
                     }
                 }
                 ACTION_START_WITH_OVERLAY -> {
@@ -266,12 +260,20 @@ class AudioCaptureService : LifecycleService() {
                             intent.getParcelableExtra(EXTRA_RESULT_DATA)
                         }
                     if(extra!=null){
-                        mediaProjection =
+                        val mediaProjection =
                             mediaProjectionManager.getMediaProjection(
                                 Activity.RESULT_OK,
                                 extra
                             ) as MediaProjection
-                        startAudioCapture()
+                        if (ActivityCompat.checkSelfPermission(
+                                this,
+                                Manifest.permission.RECORD_AUDIO
+                            ) != PackageManager.PERMISSION_GRANTED
+                        ) {
+                            // TODO: need permission
+                        }else{
+                            startRecording(mediaProjection)
+                        }
                     }
                 }
                 ACTION_RESUME_RECORD-> {
@@ -288,86 +290,35 @@ class AudioCaptureService : LifecycleService() {
         }
         return START_STICKY
     }
+
+    private fun startRecording(mediaProjection: MediaProjection){
+        audioCaptureRepository = AudioCaptureRepository(mediaProjection)
+        audioCaptureRepository.startAudioCapture(createAudioFile(AudioOriginDIR, "pcm"))
+        lifecycleScope.launch {
+            audioCaptureRepository.speech.collect {
+                Timber.d("Speech : $it")
+            }
+        }
+    }
+
     private fun pauseRecording() {
-        audioRecord.stop()
-        audioRecord.release()
-        mediaProjection.stop()
+        updateNotification(false)
         serviceScope.launch {
-            compressedAudioFile.emit(convertPcmToM4a())
+            compressedAudioFile.emit(audioCaptureRepository.convertPcmToM4a(createAudioFile(AudioCompressDIR,"m4a")))
             Timber.d("AudioCaptureService stop self()")
         }
     }
 
     private fun resumeRecording() {
-
+        updateNotification(true)
+    }
+    private fun stopAudioCapture() {
+        updateNotification(false)
+        audioCaptureRepository.closeRepository()
+        stopSelf()
     }
 
-    private fun startAudioCapture() {
-        val config = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            AudioPlaybackCaptureConfiguration.Builder(mediaProjection)
-                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                .build()
-        } else {
-            TODO("VERSION.SDK_INT < Q")
-        }
-
-        val audioFormat = AudioFormat.Builder()
-            .setEncoding(ENCODING_FORMAT)
-            .setSampleRate(SAMPLE_RATE)
-            .setChannelMask(ENCODING_CHANNEL)
-            .build()
-
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // TODO: need permission
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-
-            val bufferSize = AudioRecord.getMinBufferSize(
-                SAMPLE_RATE,
-                ENCODING_CHANNEL,
-                ENCODING_FORMAT
-            )
-            val audioData = ByteArray(bufferSize)
-
-            audioRecord = AudioRecord.Builder()
-                .setAudioFormat(audioFormat)
-                .setBufferSizeInBytes(bufferSize)
-                .setAudioPlaybackCaptureConfig(config)
-                .build()
-
-            audioRecord.startRecording()
-            audioOutputFile = createAudioFile(AudioOriginDIR, "pcm")
-
-//            vad.setContinuousSpeechListener(audioData.asList().chunked(2).map
-//            { (l, h) -> (l.toInt() + h.toInt().shl(8)).toShort() }.toShortArray(),
-//                object : VadListener{
-//                override fun onNoiseDetected() {
-//                    Timber.d("VAD Noise Detected")
-//                }
-//
-//                override fun onSpeechDetected() {
-//                    Timber.d("VAD Speech Detected")
-//                }
-//            })
-
-            audioRecordJob = CoroutineScope(Dispatchers.IO).launch {
-                audioOutputFile.writeChannel().apply {
-                    while (isActive && audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                        val readSize = audioRecord.read(audioData,0,audioData.size)
-                        writeFully(audioData,0,readSize)
-                    }
-                    Timber.d("Audio capture finished for ${audioOutputFile.absolutePath}. File size is ${audioOutputFile.length()} bytes.")
-                    close()
-                }
-            }
-        }
-    }
-    private fun createAudioFile(dir:String, filenameExt:String): File {
+    private fun createAudioFile(dir: String = AudioOriginDIR, filenameExt:String): File {
         val audioCapturesDirectory = File(cacheDir, dir)
         if (!audioCapturesDirectory.exists()) {
             audioCapturesDirectory.mkdirs()
@@ -378,92 +329,11 @@ class AudioCaptureService : LifecycleService() {
         Timber.d("Created File : ${file.absolutePath}/$fileName")
         return file
     }
-    private suspend fun convertPcmToM4a():File = withContext(Dispatchers.IO) {
-        audioCompressedFile = createAudioFile(AudioCompressDIR,"m4a")
-        val buffer = ByteArray(1024)
-        val mediaFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, SAMPLE_RATE, 1)
-        mediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-        mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, CODEC_BIT_RATE)
-
-        val mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-        val mediaMuxer = MediaMuxer(audioCompressedFile.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        var trackIndex = -1
-
-        val audioInputStream = FileInputStream(audioOutputFile)
-        val countDownLatch = CountDownLatch(1)
-        var eof = false
-
-        mediaCodec.setCallback(object: MediaCodec.Callback() {
-            override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-                if(eof) return
-                val inputBuffer = codec.getInputBuffer(index)
-                inputBuffer?.let {
-                    it.clear()
-                    val bytesRead = audioInputStream.read(buffer)
-                    if (bytesRead <= 0) {
-                        codec.queueInputBuffer(index, 0, 0, System.currentTimeMillis(), MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                        eof = true
-                        countDownLatch.countDown()
-                    } else {
-                        it.put(buffer, 0, bytesRead)
-                        codec.queueInputBuffer(index, 0, bytesRead, System.currentTimeMillis(), 0)
-                    }
-                }
-            }
-
-            override fun onOutputBufferAvailable(codec: MediaCodec, index: Int, info: MediaCodec.BufferInfo) {
-                if(eof) return
-                val outputBuffer = codec.getOutputBuffer(index)
-                outputBuffer?.let {
-                    mediaMuxer.writeSampleData(trackIndex, it, info)
-                }
-                codec.releaseOutputBuffer(index, false)
-            }
-
-            override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-                countDownLatch.countDown()
-            }
-
-            override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
-                trackIndex = mediaMuxer.addTrack(format)
-                mediaMuxer.start()
-            }
-        })
-
-        mediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        mediaCodec.start()
-
-        try {
-            countDownLatch.await()
-        } catch (e: Exception) {
-            Timber.e(e, "Error processing audio data")
-        } finally {
-            audioInputStream.close()
-            mediaCodec.stop()
-            mediaCodec.release()
-            mediaMuxer.stop()
-            mediaMuxer.release()
-        }
-
-        return@withContext audioCompressedFile
-    }
-    private fun stopAudioCapture() {
-        audioRecord.stop()
-        audioRecord.release()
-        mediaProjection.stop()
-        audioRecordJob.cancel()
-        stopSelf()
-    }
 
     companion object {
         private const val NOTIFICATION_ID = 123
         private const val NOTIFICATION_CHANNEL_ID = "Translation channel"
         private const val NOTIFICATION_CHANNEL_NAME = "Audio Capture Service Channel"
-        private const val SAMPLE_RATE = 16000 // or 44100 (maybe error occur)
-        private const val CODEC_BIT_RATE = 64000
-
-        private const val ENCODING_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val ENCODING_CHANNEL = AudioFormat.CHANNEL_IN_MONO
 
 
         const val ACTION_START = "AudioCaptureService:Start"
@@ -472,6 +342,7 @@ class AudioCaptureService : LifecycleService() {
         const val ACTION_PAUSE_RECORD = "AudioCaptureService:PauseRecord"
         const val ACTION_START_WITH_OVERLAY = "AudioCaptureService:StartWithOverlay"
         const val EXTRA_RESULT_DATA = "AudioCaptureService:Extra:ResultData"
+
         const val AudioOriginDIR = "/AudioCaptures"
         const val AudioCompressDIR = "/AudioCompress"
     }
